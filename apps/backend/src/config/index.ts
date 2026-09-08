@@ -20,6 +20,7 @@ export const config = {
   jwtSecret: requiredEnv('JWT_SECRET'),
   jwtExpiresIn: optionalEnv('JWT_EXPIRES_IN', '7d'),
   bcryptRounds: Number(optionalEnv('BCRYPT_ROUNDS', '12')),
+  encryptionKey: requiredEnv('ENCRYPTION_KEY'),
   temporalAddress: optionalEnv('TEMPORAL_ADDRESS', 'localhost:7233'),
   temporalNamespace: optionalEnv('TEMPORAL_NAMESPACE', 'default'),
 } as const;
