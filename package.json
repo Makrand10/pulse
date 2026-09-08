@@ -1,0 +1,29 @@
+{
+  "name": "pulse",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Pulse — API reliability & incident management platform (mini Datadog + PagerDuty)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test:unit": "npm run test:unit --workspaces --if-present",
+    "test:integration": "npm run test:integration --workspaces --if-present",
+    "dev": "npm run dev --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6"
+  }
+}
