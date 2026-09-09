@@ -2,7 +2,7 @@ import { proxyActivities, sleep, continueAsNew } from '@temporalio/workflow';
 import type * as activities from './activities';
 import type { PingApiResult } from './activities';
 
-const { pingApi, persistCheckResult } = proxyActivities<typeof activities>({
+const { pingApi, persistCheckResult, applyIncidentEngine } = proxyActivities<typeof activities>({
   startToCloseTimeout: '30 seconds',
   retry: {
     maximumAttempts: 3,
@@ -59,6 +59,7 @@ export async function healthCheckWorkflow(input: HealthCheckWorkflowInput): Prom
     }
 
     await persistCheckResult(result);
+    await applyIncidentEngine({ apiId: input.apiId, teamId: input.teamId });
 
     await sleep(intervalSeconds * 1000);
     iterations++;

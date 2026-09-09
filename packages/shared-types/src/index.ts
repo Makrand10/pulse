@@ -2,7 +2,19 @@ import { z } from 'zod';
 
 export type Role = 'admin' | 'member';
 
-export type IncidentStatus = 'OPEN' | 'INVESTIGATING' | 'RESOLVED';
+export const incidentStatusSchema = z.enum(['OPEN', 'INVESTIGATING', 'RESOLVED']);
+export type IncidentStatus = z.infer<typeof incidentStatusSchema>;
+
+export const incidentTimelineEventTypeSchema = z.enum(['OPENED', 'INVESTIGATING', 'RESOLVED', 'COMMENT']);
+export type IncidentTimelineEventType = z.infer<typeof incidentTimelineEventTypeSchema>;
+
+export const incidentCommentSchema = z.object({
+  message: z.string().min(1).max(1000),
+});
+
+export const incidentStatusUpdateSchema = z.object({
+  status: z.enum(['INVESTIGATING', 'RESOLVED']),
+});
 
 export type CheckStatus = 'UP' | 'DOWN' | 'DEGRADED';
 

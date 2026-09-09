@@ -3,6 +3,10 @@ import { decryptSecret } from '../modules/apis/crypto';
 import { recordCheckResult, getApiForWorker } from '../modules/healthchecks/repository';
 import type { CheckStatus } from '@pulse/shared-types';
 
+// Re-exported engine runner: Temporal registers this exported activity and the
+// worker will pick it up automatically (worker.ts imports `* as activities`).
+export { applyIncidentEngine } from '../modules/incidents/engine';
+
 const PROBE_TIMEOUT_MS = 10_000;
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MS = [0, 1_000, 2_000]; // exponential backoff, as a total of 3 attempts (PRD §7.3)

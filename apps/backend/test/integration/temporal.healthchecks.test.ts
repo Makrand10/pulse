@@ -35,6 +35,9 @@ function makeStubActivities(probeCalls: { count: number }) {
     async persistCheckResult(result: Parameters<typeof recordCheckResult>[0]): Promise<void> {
       await recordCheckResult(result);
     },
+    async applyIncidentEngine(_input: { apiId: string; teamId: string }): Promise<void> {
+      // Pure UP sequences never transition the incident state machine.
+    },
   };
 }
 
