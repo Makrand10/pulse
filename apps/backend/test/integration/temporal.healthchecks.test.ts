@@ -72,11 +72,15 @@ describe('M3 DoD: durable health-check engine', () => {
 
     try {
       // ---- Worker #1 executes the workflow ----
+      // maxCachedWorkflows: 0 disables sticky execution so that after this
+      // worker "crashes", the workflow's next task is dispatched to the normal
+      // task queue where worker #2 can pick it up.
       const worker1 = await Worker.create({
         connection: env.nativeConnection,
         taskQueue: TASK_QUEUE,
         workflowsPath,
         activities: stub,
+        maxCachedWorkflows: 0,
       });
       workers.push(worker1);
       const run1 = worker1.run();
@@ -119,14 +123,23 @@ describe('M3 DoD: durable health-check engine', () => {
       taskQueue: TASK_QUEUE,
       workflowsPath,
       activities: stub,
+      maxCachedWorkflows: 0,
     });
     const run2 = worker2.run();
     try {
       await idle(3000); // let worker2 finish bootstrapping before time advances
-      await env.sleep(INTERVAL_SECONDS * 1000 + 2000);
-      await env.sleep(INTERVAL_SECONDS * 1000 + 2000);
 
-      const checksAfterRestart = await checkCount();
+      // Advance time in short hops and poll until the workflow (now running on
+      // worker #2) persists new checks. This decouples the assertion from the
+      // virtual-clock/wall-clock race that happens right after a restart.
+      let checksAfterRestart = await checkCount();
+      const HOP_MS = INTERVAL_SECONDS * 1000;
+      const MAX_HOPS = 6;
+      for (let hop = 0; hop < MAX_HOPS && checksAfterRestart <= checksBeforeCrash; hop++) {
+        await env.sleep(HOP_MS);
+        await idle(500); // let Mongo writes flush before counting again
+        checksAfterRestart = await checkCount();
+      }
       expect(checksAfterRestart).toBeGreaterThan(checksBeforeCrash);
 
       // No check is duplicated: every (apiId, checkedAt) pair is unique.
