@@ -68,6 +68,7 @@ describe('M3 DoD: durable health-check engine', () => {
     const probeCalls = { count: 0 };
     const stub = makeStubActivities(probeCalls);
     const workers: Worker[] = [];
+    let checksBeforeCrash = 0;
 
     try {
       // ---- Worker #1 executes the workflow ----
@@ -88,7 +89,7 @@ describe('M3 DoD: durable health-check engine', () => {
       });
 
       await env.sleep(INTERVAL_SECONDS * 1000 * 3 + 1000);
-      const checksBeforeCrash = await checkCount();
+      checksBeforeCrash = await checkCount();
       expect(checksBeforeCrash).toBeGreaterThanOrEqual(2);
 
       // ---- "Crash": kill worker #1 while the workflow is mid-loop ----
