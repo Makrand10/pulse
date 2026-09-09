@@ -4,6 +4,9 @@ import { toApiDto } from './serializers';
 import { apiCreateSchema, apiUpdateSchema } from '@pulse/shared-types';
 import { assertUrlProbeable } from '../../lib/ssrf';
 import { authGuard, requireTeam } from '../../middleware/auth';
+import { startHealthCheckWorkflow, stopHealthCheckWorkflow } from '../../temporal/lifecycle';
+import { logger } from '../../lib/logger';
+import { listCheckResults } from '../healthchecks/repository';
 
 const router = Router();
 
@@ -13,6 +16,7 @@ router.post('/', async (req: Request, res: Response) => {
   const input = apiCreateSchema.parse(req.body);
   assertUrlProbeable(input.url);
   const api = await createApi(req.teamId!, input);
+  scheduleChecks(api._id.toString(), req.teamId!, api.intervalSeconds);
   res.status(201).json(toApiDto(api));
 });
 
@@ -32,12 +36,38 @@ router.patch('/:apiId', async (req: Request, res: Response) => {
     assertUrlProbeable(input.url);
   }
   const api = await updateApi(req.teamId!, String(req.params.apiId), input);
+  if (input.isActive === false) {
+    cancelChecks(api._id.toString());
+  } else if (input.isActive === true) {
+    scheduleChecks(api._id.toString(), req.teamId!, api.intervalSeconds);
+  }
   res.json(toApiDto(api));
 });
 
 router.delete('/:apiId', async (req: Request, res: Response) => {
-  await deleteApi(req.teamId!, String(req.params.apiId));
+  const apiId = String(req.params.apiId);
+  await deleteApi(req.teamId!, apiId);
+  cancelChecks(apiId);
   res.status(204).send();
 });
+
+router.get('/:apiId/checks', async (req: Request, res: Response) => {
+  const apiId = String(req.params.apiId);
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const checks = await listCheckResults(req.teamId!, apiId, limit);
+  res.json(checks);
+});
+
+function scheduleChecks(apiId: string, teamId: string, intervalSeconds: number): void {
+  startHealthCheckWorkflow(apiId, teamId, intervalSeconds).catch((err) => {
+    logger.warn({ err }, `temporal unavailable; health checks for ${apiId} not started`);
+  });
+}
+
+function cancelChecks(apiId: string): void {
+  stopHealthCheckWorkflow(apiId).catch((err) => {
+    logger.warn({ err }, `temporal unavailable; health checks for ${apiId} not stopped`);
+  });
+}
 
 export default router;
