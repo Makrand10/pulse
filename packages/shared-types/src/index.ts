@@ -18,6 +18,12 @@ export const incidentStatusUpdateSchema = z.object({
 
 export type CheckStatus = 'UP' | 'DOWN' | 'DEGRADED';
 
+export const notificationTypeSchema = z.enum(['INCIDENT_OPENED', 'INCIDENT_RESOLVED']);
+export type NotificationType = z.infer<typeof notificationTypeSchema>;
+
+export const notificationEmailStatusSchema = z.enum(['PENDING', 'SENT', 'FAILED']);
+export type NotificationEmailStatus = z.infer<typeof notificationEmailStatusSchema>;
+
 export const apiMethodSchema = z.enum(['GET', 'POST', 'HEAD']);
 
 export const apiCreateSchema = z.object({
