@@ -4,6 +4,7 @@ import { logger } from '../../lib/logger';
 import { runAnalysis } from './graph';
 import { persistIncidentAnalysis } from '../incidents/repository';
 import { canAttemptClaude, recordClaudeSuccess, recordClaudeFailure } from './breaker';
+import { canSpendAiCall, recordAiCall } from './budget';
 
 const JOB_NAME = 'ai-incident-analysis';
 
@@ -41,10 +42,17 @@ export interface AiAnalysisJobData {
 // throws out of the caller (DoD (b)): a down queue leaves aiSummary null and
 // the failure is only logged.
 export async function enqueueAiAnalysis(input: AiAnalysisJobData): Promise<void> {
+  if (!config.aiEnabled) {
+    logger.warn('ai analysis enqueue skipped: AI_ENABLED=false');
+    return;
+  }
   try {
     await getAiQueue().add(JOB_NAME, input, {
-      attempts: 2, // one original + one retry per PRD "enqueue one retry"
-      backoff: { type: 'fixed', delay: 15_000 },
+      // PRD §6.6 guarantees >=1 retry; the longer exponential backoff widens
+      // the window so a transient provider/network issue (or a corrected API
+      // key) can self-heal instead of leaving an incident permanently un-analyzed.
+      attempts: 6,
+      backoff: { type: 'exponential', delay: 30_000 },
       removeOnComplete: 100,
       removeOnFail: 100,
     });
@@ -53,17 +61,27 @@ export async function enqueueAiAnalysis(input: AiAnalysisJobData): Promise<void>
   }
 }
 
-// One graph run per delivery. Claude outage/timeout → persist aiSummary null,
-// rethrow so BullMQ performs the single retry; after retries the job fails and
-// ai_failed is logged (never thrown up to the incident path).
+// One graph run per delivery. Provider outage/timeout → persist aiSummary null,
+// rethrow so BullMQ backs off and retries; after retries the job fails and
+// ai_failed is logged (never thrown up to the incident path). Every failed
+// attempt is logged so backoff retries are observable.
 export async function processAiAnalysisJob(job: Job<AiAnalysisJobData>): Promise<void> {
   const attemptsMade = job.attemptsMade ?? 0;
+  const totalAttempts = job.opts?.attempts ?? 2;
+
+  if (!canSpendAiCall()) {
+    await persistIncidentAnalysis(job.data.teamId, job.data.incidentId, { aiSummary: null, aiSuggestedCause: null });
+    logger.warn({ incidentId: job.data.incidentId }, 'ai analysis skipped: not enabled or daily budget exhausted');
+    return;
+  }
 
   if (!canAttemptClaude()) {
     await persistIncidentAnalysis(job.data.teamId, job.data.incidentId, { aiSummary: null, aiSuggestedCause: null });
     logger.warn({ incidentId: job.data.incidentId }, 'ai analysis skipped: circuit breaker open');
     return;
   }
+
+  recordAiCall();
 
   try {
     await runAnalysis({
@@ -75,12 +93,12 @@ export async function processAiAnalysisJob(job: Job<AiAnalysisJobData>): Promise
   } catch (err) {
     recordClaudeFailure();
     await persistIncidentAnalysis(job.data.teamId, job.data.incidentId, { aiSummary: null, aiSuggestedCause: null });
-    if (attemptsMade + 1 >= (job.opts?.attempts ?? 2)) {
-      logger.warn(
-        { err: err instanceof Error ? err.message : String(err), incidentId: job.data.incidentId },
-        'ai_failed: Claude retries exhausted, aiSummary=null',
-      );
-    }
+    const failure = err instanceof Error ? err.message : String(err);
+    const isFinal = attemptsMade + 1 >= totalAttempts;
+    logger.warn(
+      { err: failure, incidentId: job.data.incidentId, attempt: attemptsMade + 1, totalAttempts },
+      isFinal ? 'ai_failed: retries exhausted, aiSummary=null' : 'ai_failed: attempt failed, backing off and retrying',
+    );
     throw err;
   }
 }

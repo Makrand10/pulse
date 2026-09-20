@@ -22,7 +22,13 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.get('/', async (req: Request, res: Response) => {
   const apis = await listApis(req.teamId!);
-  res.json(apis.map(toApiDto));
+  const dtos = await Promise.all(
+    apis.map(async (api) => ({
+      ...toApiDto(api),
+      currentStatus: await getCurrentStatus(req.teamId!, String(api._id)),
+    })),
+  );
+  res.json(dtos);
 });
 
 router.get('/:apiId', async (req: Request, res: Response) => {

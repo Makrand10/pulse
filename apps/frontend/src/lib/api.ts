@@ -17,6 +17,7 @@ export interface ApiDto {
   hasAuthToken: boolean;
   isActive: boolean;
   isPublic: boolean;
+  currentStatus?: LatestCheck | null;
   createdAt: string;
   updatedAt: string;
 }

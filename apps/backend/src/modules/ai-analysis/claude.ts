@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../../config';
 import { logger } from '../../lib/logger';
+import { parseJsonOutput } from './json';
+import { GroqClient } from './groq';
 
 export interface ClaudeAnalysis {
   summary: string;
@@ -16,6 +18,8 @@ export interface ClaudeClient {
   analyze(input: ClaudeAnalyzeInput): Promise<ClaudeAnalysis>;
 }
 
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+
 // Anthropic-backed implementation behind an interface so tests inject a mock.
 class AnthropicClaudeClient implements ClaudeClient {
   async analyze(input: ClaudeAnalyzeInput): Promise<ClaudeAnalysis> {
@@ -29,8 +33,8 @@ class AnthropicClaudeClient implements ClaudeClient {
     try {
       const message = await client.messages.create(
         {
-          model: config.aiModel,
-          max_tokens: 500,
+          model: config.aiModel || DEFAULT_CLAUDE_MODEL,
+          max_tokens: config.aiMaxTokens,
           messages: [{ role: 'user', content: input.prompt }],
         },
         { signal: controller.signal },
@@ -46,46 +50,18 @@ class AnthropicClaudeClient implements ClaudeClient {
   }
 }
 
-function parseJsonOutput(text: string): ClaudeAnalysis {
-  const cleaned = extractJson(text);
-  if (!cleaned) {
-    throw new Error(`Claude response was not valid JSON: ${text.slice(0, 200)}`);
+export { AnthropicClaudeClient };
+
+let active: ClaudeClient = defaultClient();
+
+// Provider selected once at startup: AI_PROVIDER=groq (free, default) or claude.
+function defaultClient(): ClaudeClient {
+  if (config.aiProvider === 'claude') {
+    return new AnthropicClaudeClient();
   }
-  const data = JSON.parse(cleaned);
-  if (typeof data.summary !== 'string') {
-    throw new Error('Claude response missing "summary"');
-  }
-  return {
-    summary: data.summary,
-    suggestedCause: typeof data.suggestedCause === 'string' ? data.suggestedCause : null,
-    nextDebugStep: typeof data.nextDebugStep === 'string' ? data.nextDebugStep : '',
-  };
+  return new GroqClient();
 }
-
-function extractJson(text: string): string | null {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1].trim() : trimmed;
-  try {
-    JSON.parse(candidate);
-    return candidate;
-  } catch {
-    const start = candidate.indexOf('{');
-    const end = candidate.lastIndexOf('}');
-    if (start === -1 || end === -1 || end <= start) return null;
-    const sub = candidate.slice(start, end + 1);
-    try {
-      JSON.parse(sub);
-      return sub;
-    } catch {
-      return null;
-    }
-  }
-}
-
-let active: ClaudeClient = new AnthropicClaudeClient();
-
-// Swappable for tests (mock Claude / mock timeout).
+// Swappable injection seam for tests (mock provider / mock timeout).
 export function setClaudeClient(client: ClaudeClient): ClaudeClient {
   const previous = active;
   active = client;
