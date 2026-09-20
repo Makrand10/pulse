@@ -4,6 +4,7 @@ import { logger } from '../../lib/logger';
 import { runAnalysis } from './graph';
 import { persistIncidentAnalysis } from '../incidents/repository';
 import { canAttemptClaude, recordClaudeSuccess, recordClaudeFailure } from './breaker';
+import { canSpendClaudeCall, recordClaudeCall } from './budget';
 
 const JOB_NAME = 'ai-incident-analysis';
 
@@ -41,6 +42,7 @@ export interface AiAnalysisJobData {
 // throws out of the caller (DoD (b)): a down queue leaves aiSummary null and
 // the failure is only logged.
 export async function enqueueAiAnalysis(input: AiAnalysisJobData): Promise<void> {
+  if (!config.aiEnabled) return;
   try {
     await getAiQueue().add(JOB_NAME, input, {
       attempts: 2, // one original + one retry per PRD "enqueue one retry"
@@ -65,7 +67,17 @@ export async function processAiAnalysisJob(job: Job<AiAnalysisJobData>): Promise
     return;
   }
 
+  if (!canSpendClaudeCall()) {
+    await persistIncidentAnalysis(job.data.teamId, job.data.incidentId, { aiSummary: null, aiSuggestedCause: null });
+    logger.warn(
+      { incidentId: job.data.incidentId, cap: config.aiDailyCallCap },
+      'ai analysis skipped: daily budget exhausted',
+    );
+    return;
+  }
+
   try {
+    recordClaudeCall();
     await runAnalysis({
       teamId: job.data.teamId,
       apiId: job.data.apiId,

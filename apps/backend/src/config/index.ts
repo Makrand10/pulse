@@ -30,9 +30,12 @@ export const config = {
   emailMaxAttempts: Number(optionalEnv('EMAIL_MAX_ATTEMPTS', '5')),
   emailBackoffMs: Number(optionalEnv('EMAIL_BACKOFF_MS', '5000')),
   anthropicApiKey: optionalEnv('ANTHROPIC_API_KEY', ''),
+  aiEnabled: optionalEnv('AI_ENABLED', 'true') === 'true',
   aiTimeoutMs: Number(optionalEnv('AI_TIMEOUT_MS', '10000')),
   aiAnalysisQueueName: optionalEnv('AI_ANALYSIS_QUEUE_NAME', 'pulse-ai-analysis'),
   aiModel: optionalEnv('AI_MODEL', 'claude-sonnet-4-20250514'),
+  aiMaxTokens: Number(optionalEnv('AI_MAX_TOKENS', '300')),
+  aiDailyCallCap: Number(optionalEnv('AI_DAILY_CALL_CAP', '10')),
 } as const;
 
 export type Config = typeof config;

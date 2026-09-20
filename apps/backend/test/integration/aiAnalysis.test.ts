@@ -11,6 +11,8 @@ import { setClaudeClient, getClaudeClient, type ClaudeClient } from '../../src/m
 import { runAnalysis } from '../../src/modules/ai-analysis/graph';
 import { processAiAnalysisJob, type AiAnalysisJobData } from '../../src/modules/ai-analysis/queue';
 import { resetBreaker } from '../../src/modules/ai-analysis/breaker';
+import { resetDailyBudget } from '../../src/modules/ai-analysis/budget';
+import { config } from '../../src/config';
 import type { CheckStatus } from '@pulse/shared-types';
 
 let mongo: MongoMemoryServer;
@@ -69,6 +71,7 @@ afterAll(async () => {
 beforeEach(() => {
   claudeCalls = 0;
   resetBreaker();
+  resetDailyBudget();
 });
 
 afterEach(() => {
@@ -211,6 +214,36 @@ describe('M6 DoD: incident creation path is never blocked by AI', () => {
     const result = await processAiAnalysisJob(fakeJob({ teamId, apiId, incidentId }, 0, 'open'));
     expect(result).toBeUndefined();
     expect(claudeCalls).toBe(callsWhileFailing); // no new Claude call
+    const stored = await Incident.findOne({ teamId });
+    expect(stored!.aiSummary).toBeNull();
+  });
+
+  it('never calls Claude once the daily budget is exhausted (bill-safety)', async () => {
+    const teamId = new Types.ObjectId().toString();
+    const { apiId, incidentId } = await openIncident(teamId);
+    await recordStatuses(teamId, apiId, ['DOWN', 'DOWN', 'DOWN']);
+
+    setClaudeClient({
+      async analyze() {
+        claudeCalls += 1;
+        return {
+          summary: 's',
+          suggestedCause: 'c',
+          nextDebugStep: 'd',
+        };
+      },
+    });
+
+    // Consume the entire daily budget (AI_DAILY_CALL_CAP default is 10).
+    for (let i = 0; i < config.aiDailyCallCap; i++) {
+      await processAiAnalysisJob(fakeJob({ teamId, apiId, incidentId }, 0, `budget-${i}`));
+    }
+    expect(claudeCalls).toBe(config.aiDailyCallCap);
+
+    // Next delivery: skipped, persisted null, job completes without throwing.
+    const result = await processAiAnalysisJob(fakeJob({ teamId, apiId, incidentId }, 0, 'over-budget'));
+    expect(result).toBeUndefined();
+    expect(claudeCalls).toBe(config.aiDailyCallCap); // hard stop, zero spend
     const stored = await Incident.findOne({ teamId });
     expect(stored!.aiSummary).toBeNull();
   });

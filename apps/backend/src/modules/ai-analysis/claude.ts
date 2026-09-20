@@ -30,7 +30,7 @@ class AnthropicClaudeClient implements ClaudeClient {
       const message = await client.messages.create(
         {
           model: config.aiModel,
-          max_tokens: 500,
+          max_tokens: config.aiMaxTokens,
           messages: [{ role: 'user', content: input.prompt }],
         },
         { signal: controller.signal },
