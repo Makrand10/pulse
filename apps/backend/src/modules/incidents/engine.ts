@@ -1,5 +1,7 @@
 import { evaluateStreak, DEFAULT_FAILURE_THRESHOLD, DEFAULT_SUCCESS_THRESHOLD } from './stateMachine';
 import { findOpenIncident, getRecentCheckStatuses, createIncident, resolveIncident } from './repository';
+import { getApiForWorker } from '../healthchecks/repository';
+import { notifyIncidentEvent } from '../notifications/service';
 
 const STREAK_WINDOW = Math.max(DEFAULT_FAILURE_THRESHOLD, DEFAULT_SUCCESS_THRESHOLD);
 
@@ -20,8 +22,26 @@ export async function applyIncidentEngine(input: { apiId: string; teamId: string
   );
 
   if (decision === 'OPEN' && !open) {
-    await createIncident(teamId, apiId, `Open after ${DEFAULT_FAILURE_THRESHOLD} consecutive failures`);
+    const incident = await createIncident(teamId, apiId, `Open after ${DEFAULT_FAILURE_THRESHOLD} consecutive failures`);
+    const api = await getApiForWorker(apiId);
+    await notifyIncidentEvent({
+      teamId,
+      apiId,
+      incidentId: String(incident._id),
+      type: 'INCIDENT_OPENED',
+      apiName: api?.name ?? 'Unknown API',
+    });
   } else if (decision === 'RESOLVE' && open) {
-    await resolveIncident(teamId, String(open._id), `Auto-resolved after ${DEFAULT_SUCCESS_THRESHOLD} consecutive successes`);
+    const incident = await resolveIncident(teamId, String(open._id), `Auto-resolved after ${DEFAULT_SUCCESS_THRESHOLD} consecutive successes`);
+    if (incident) {
+      const api = await getApiForWorker(apiId);
+      await notifyIncidentEvent({
+        teamId,
+        apiId,
+        incidentId: String(incident._id),
+        type: 'INCIDENT_RESOLVED',
+        apiName: api?.name ?? 'Unknown API',
+      });
+    }
   }
 }

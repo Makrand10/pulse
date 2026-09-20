@@ -23,6 +23,12 @@ export const config = {
   encryptionKey: requiredEnv('ENCRYPTION_KEY'),
   temporalAddress: optionalEnv('TEMPORAL_ADDRESS', 'localhost:7233'),
   temporalNamespace: optionalEnv('TEMPORAL_NAMESPACE', 'default'),
+  resendApiKey: optionalEnv('RESEND_API_KEY', ''),
+  emailFrom: optionalEnv('EMAIL_FROM', 'Pulse <alerts@pulse.dev>'),
+  appBaseUrl: optionalEnv('APP_BASE_URL', 'http://localhost:3000'),
+  notifyQueueName: optionalEnv('NOTIFY_QUEUE_NAME', 'pulse-notifications'),
+  emailMaxAttempts: Number(optionalEnv('EMAIL_MAX_ATTEMPTS', '5')),
+  emailBackoffMs: Number(optionalEnv('EMAIL_BACKOFF_MS', '5000')),
 } as const;
 
 export type Config = typeof config;
