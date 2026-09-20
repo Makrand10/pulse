@@ -105,6 +105,24 @@ export async function getIncident(teamId: string, incidentId: string): Promise<I
   return Incident.findOne({ _id: incidentId, teamId });
 }
 
+export interface IncidentAnalysisInput {
+  aiSummary: string | null;
+  aiSuggestedCause: string | null;
+}
+
+export async function persistIncidentAnalysis(
+  teamId: string,
+  incidentId: string,
+  analysis: IncidentAnalysisInput,
+): Promise<IncidentDoc | null> {
+  if (!isValidId(incidentId)) return null;
+  return Incident.findOneAndUpdate(
+    { _id: incidentId, teamId },
+    { $set: analysis },
+    { returnDocument: 'after' },
+  );
+}
+
 export async function listIncidents(teamId: string, status?: IncidentStatus): Promise<IncidentDoc[]> {
   const filter: { teamId: string; status?: IncidentStatus } = { teamId };
   if (status) filter.status = status;
