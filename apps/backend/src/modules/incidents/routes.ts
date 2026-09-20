@@ -17,7 +17,8 @@ router.use(authGuard, requireTeam());
 router.get('/', async (req, res) => {
   const rawStatus = req.query.status;
   const status = rawStatus ? incidentStatusSchema.parse(rawStatus) : undefined;
-  const incidents = await listIncidents(req.teamId!, status);
+  const apiId = typeof req.query.apiId === 'string' && req.query.apiId ? String(req.query.apiId) : undefined;
+  const incidents = await listIncidents(req.teamId!, status, apiId);
   res.json(incidents.map(toIncidentDto));
 });
 

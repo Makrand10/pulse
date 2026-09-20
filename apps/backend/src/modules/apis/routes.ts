@@ -6,7 +6,7 @@ import { assertUrlProbeable } from '../../lib/ssrf';
 import { authGuard, requireTeam } from '../../middleware/auth';
 import { startHealthCheckWorkflow, stopHealthCheckWorkflow } from '../../temporal/lifecycle';
 import { logger } from '../../lib/logger';
-import { listCheckResults } from '../healthchecks/repository';
+import { listCheckResults, getUptimeStats, getCurrentStatus } from '../healthchecks/repository';
 
 const router = Router();
 
@@ -26,8 +26,13 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 router.get('/:apiId', async (req: Request, res: Response) => {
-  const api = await getApi(req.teamId!, String(req.params.apiId));
-  res.json(toApiDto(api));
+  const apiId = String(req.params.apiId);
+  const api = await getApi(req.teamId!, apiId);
+  const [uptime, currentStatus] = await Promise.all([
+    getUptimeStats(req.teamId!, apiId),
+    getCurrentStatus(req.teamId!, apiId),
+  ]);
+  res.json({ ...toApiDto(api), uptime, currentStatus });
 });
 
 router.patch('/:apiId', async (req: Request, res: Response) => {

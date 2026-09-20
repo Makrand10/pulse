@@ -123,9 +123,14 @@ export async function persistIncidentAnalysis(
   );
 }
 
-export async function listIncidents(teamId: string, status?: IncidentStatus): Promise<IncidentDoc[]> {
-  const filter: { teamId: string; status?: IncidentStatus } = { teamId };
+export async function listIncidents(
+  teamId: string,
+  status?: IncidentStatus,
+  apiId?: string,
+): Promise<IncidentDoc[]> {
+  const filter: { teamId: string; status?: IncidentStatus; apiId?: string } = { teamId };
   if (status) filter.status = status;
+  if (apiId) filter.apiId = apiId;
   return Incident.find(filter).sort({ startedAt: -1 });
 }
 

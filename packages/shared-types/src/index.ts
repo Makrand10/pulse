@@ -58,3 +58,19 @@ export interface ApiConfig {
   isActive: boolean;
   isPublic: boolean;
 }
+
+export interface LatestCheck {
+  status: CheckStatus;
+  latencyMs: number;
+  statusCode?: number;
+  errorMessage?: string;
+  checkedAt: string;
+}
+
+// Uptime % for 24h/7d/30d, aggregated from UptimeRollup (§6.4). null means
+// "insufficient data" (no covered buckets), never a fabricated 100%.
+export interface UptimeStats {
+  pct24h: number | null;
+  pct7d: number | null;
+  pct30d: number | null;
+}

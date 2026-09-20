@@ -183,6 +183,38 @@ describe('incidents REST API', () => {
     expect(openOnly.body).toHaveLength(0);
   });
 
+  it('filters incidents by apiId (dashboard detail feed)', async () => {
+    const app = createApp();
+    const token = await signupAndToken('m4-f@example.com', 'IncidentFilter');
+    const login = await request(app).post('/api/v1/auth/login').send({
+      email: 'm4-f@example.com',
+      password: 'password123',
+    });
+    const teamId = login.body.user.teamId as string;
+    const apiA = await createApi(teamId);
+    const apiB = await createApi(teamId);
+
+    await recordStatuses(teamId, apiA, ['DOWN', 'DOWN', 'DOWN']);
+    await applyIncidentEngine({ apiId: apiA, teamId });
+    await recordStatuses(teamId, apiB, ['DOWN', 'DOWN', 'DOWN']);
+    await applyIncidentEngine({ apiId: apiB, teamId });
+
+    const all = await request(app).get('/api/v1/incidents').set('Authorization', `Bearer ${token}`);
+    expect(all.body).toHaveLength(2);
+
+    const filtered = await request(app)
+      .get(`/api/v1/incidents?apiId=${apiA}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(filtered.status).toBe(200);
+    expect(filtered.body).toHaveLength(1);
+    expect(filtered.body[0].apiId).toBe(apiA);
+
+    const none = await request(app)
+      .get(`/api/v1/incidents?apiId=${await createApi(teamId)}&status=OPEN`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(none.body).toHaveLength(0);
+  });
+
   it('gets a single incident', async () => {
     const app = createApp();
     const token = await signupAndToken('m4-g@example.com', 'IncidentGet');

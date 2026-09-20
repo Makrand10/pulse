@@ -4,6 +4,8 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApp } from '../../src/app';
 import { connectDb, disconnectDb } from '../../src/lib/db';
 import { signToken } from '../../src/modules/auth/token';
+import { CheckResult } from '../../src/db/models/CheckResult';
+import { computeHourlyUptimeRollups } from '../../src/modules/healthchecks/repository';
 
 let mongo: MongoMemoryServer;
 const PUBLIC_URL = 'https://api.example.com/status';
@@ -288,5 +290,46 @@ describe('multi-tenant isolation', () => {
       .set('Authorization', `Bearer ${memberToken}`);
     expect(res.status).toBe(200);
     expect(res.body.some((a: { name: string }) => a.name === 'Shared')).toBe(true);
+  });
+});
+
+describe('API detail endpoint (§6.4 uptime & status)', () => {
+  it('includes uptime and currentStatus', async () => {
+    const app = createApp();
+    const token = await signupAndToken('m7-s@example.com', 'DetailCo');
+    const createRes = await request(app)
+      .post('/api/v1/apis')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Billing', url: PUBLIC_URL });
+    const apiId = createRes.body.id as string;
+
+    const detail = await request(app)
+      .get(`/api/v1/apis/${apiId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.uptime).toEqual({ pct24h: null, pct7d: null, pct30d: null });
+    expect(detail.body.currentStatus).toBeNull();
+
+    const app2 = createApp();
+    const token2 = await signupAndToken('m7-s2@example.com', 'DetailCo2');
+    const createRes2 = await request(app2)
+      .post('/api/v1/apis')
+      .set('Authorization', `Bearer ${token2}`)
+      .send({ name: 'Billing2', url: PUBLIC_URL });
+    const apiId2 = createRes2.body.id as string;
+
+    const res = await request(app2).get('/api/v1/apis').set('Authorization', `Bearer ${token2}`);
+    const teamId = res.body.find((a: { id: string }) => a.id === apiId2).teamId as string;
+
+    const hour = Math.floor(Date.now() / 3600_000) * 3600_000;
+    await CheckResult.create({ teamId, apiId: apiId2, status: 'UP', latencyMs: 40, checkedAt: new Date(hour) });
+    const buckets = await computeHourlyUptimeRollups();
+    expect(buckets).toBeGreaterThanOrEqual(1);
+
+    const detail2 = await request(app2)
+      .get(`/api/v1/apis/${apiId2}`)
+      .set('Authorization', `Bearer ${token2}`);
+    expect(detail2.body.uptime.pct24h).toBeCloseTo(100, 0);
+    expect(detail2.body.currentStatus.status).toBe('UP');
   });
 });

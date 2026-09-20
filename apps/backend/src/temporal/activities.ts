@@ -1,6 +1,6 @@
 import { ApplicationFailure } from '@temporalio/common';
 import { decryptSecret } from '../modules/apis/crypto';
-import { recordCheckResult, getApiForWorker } from '../modules/healthchecks/repository';
+import { recordCheckResult, computeHourlyUptimeRollups, getApiForWorker } from '../modules/healthchecks/repository';
 import type { CheckStatus } from '@pulse/shared-types';
 
 // Re-exported engine runner: Temporal registers this exported activity and the
@@ -85,4 +85,10 @@ export async function pingApi(apiId: string): Promise<PingApiResult> {
 
 export async function persistCheckResult(result: Pick<PingApiResult, 'apiId' | 'teamId' | 'status' | 'latencyMs' | 'statusCode' | 'errorMessage'>): Promise<void> {
   await recordCheckResult(result);
+}
+
+// Hourly §6.4 aggregation. Returns the number of buckets written so the
+// workflow can log a meaningful summary.
+export async function computeUptimeRollups(): Promise<number> {
+  return computeHourlyUptimeRollups();
 }
