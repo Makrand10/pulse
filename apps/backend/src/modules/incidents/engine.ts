@@ -2,6 +2,7 @@ import { evaluateStreak, DEFAULT_FAILURE_THRESHOLD, DEFAULT_SUCCESS_THRESHOLD } 
 import { findOpenIncident, getRecentCheckStatuses, createIncident, resolveIncident } from './repository';
 import { getApiForWorker } from '../healthchecks/repository';
 import { notifyIncidentEvent } from '../notifications/service';
+import { enqueueAiAnalysis } from '../ai-analysis/queue';
 
 const STREAK_WINDOW = Math.max(DEFAULT_FAILURE_THRESHOLD, DEFAULT_SUCCESS_THRESHOLD);
 
@@ -31,6 +32,10 @@ export async function applyIncidentEngine(input: { apiId: string; teamId: string
       type: 'INCIDENT_OPENED',
       apiName: api?.name ?? 'Unknown API',
     });
+    // Fire-and-forget root-cause analysis (§6.6): enqueue never blocks or
+    // throws out of the incident path; on queue/Claude failure aiSummary stays
+    // null and the worker retries once.
+    await enqueueAiAnalysis({ teamId, apiId, incidentId: String(incident._id) });
   } else if (decision === 'RESOLVE' && open) {
     const incident = await resolveIncident(teamId, String(open._id), `Auto-resolved after ${DEFAULT_SUCCESS_THRESHOLD} consecutive successes`);
     if (incident) {

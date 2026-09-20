@@ -29,6 +29,10 @@ export const config = {
   notifyQueueName: optionalEnv('NOTIFY_QUEUE_NAME', 'pulse-notifications'),
   emailMaxAttempts: Number(optionalEnv('EMAIL_MAX_ATTEMPTS', '5')),
   emailBackoffMs: Number(optionalEnv('EMAIL_BACKOFF_MS', '5000')),
+  anthropicApiKey: optionalEnv('ANTHROPIC_API_KEY', ''),
+  aiTimeoutMs: Number(optionalEnv('AI_TIMEOUT_MS', '10000')),
+  aiAnalysisQueueName: optionalEnv('AI_ANALYSIS_QUEUE_NAME', 'pulse-ai-analysis'),
+  aiModel: optionalEnv('AI_MODEL', 'claude-sonnet-4-20250514'),
 } as const;
 
 export type Config = typeof config;
