@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
+import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApp } from '../../src/app';
 import { connectDb, disconnectDb } from '../../src/lib/db';
@@ -128,5 +129,114 @@ describe('teams + invitations', () => {
     const res = await request(app).get('/api/v1/teams');
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('a member lists only their own team (non-admin path)', async () => {
+    const app = createApp();
+    const { token, team } = await signupAdmin(app, 'Admin6', 't6-admin@example.com', 'Zeta');
+    const member = await signupMember(app, 'Member6', 't6-user@example.com', 'user');
+
+    await request(app)
+      .post(`/api/v1/teams/${team.id}/invitations`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: member.user.id, role: 'user' });
+
+    const accepted = await request(app)
+      .post(`/api/v1/teams/${team.id}/invitations/accept`)
+      .set('Authorization', `Bearer ${member.token}`);
+
+    const res = await request(app)
+      .get('/api/v1/teams')
+      .set('Authorization', `Bearer ${accepted.body.token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([expect.objectContaining({ id: team.id, name: 'Zeta', role: 'user' })]);
+  });
+
+  it('a user who has not joined a team gets an empty team list', async () => {
+    const app = createApp();
+    const member = await signupMember(app, 'Teamless', 't7-user@example.com', 'user');
+
+    const res = await request(app)
+      .get('/api/v1/teams')
+      .set('Authorization', `Bearer ${member.token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('a teamless member cannot read team-scoped members (403)', async () => {
+    const app = createApp();
+    const member = await signupMember(app, 'Teamless2', 't8-user@example.com', 'user');
+
+    const res = await request(app)
+      .get('/api/v1/teams/members')
+      .set('Authorization', `Bearer ${member.token}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('accepting an invitation that was never sent returns 404', async () => {
+    const app = createApp();
+    const { team } = await signupAdmin(app, 'Admin9', 't9-admin@example.com', 'Eta');
+    const member = await signupMember(app, 'Member9', 't9-user@example.com', 'user');
+
+    const res = await request(app)
+      .post(`/api/v1/teams/${team.id}/invitations/accept`)
+      .set('Authorization', `Bearer ${member.token}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('inviting an unknown user id returns 404', async () => {
+    const app = createApp();
+    const { token, team } = await signupAdmin(app, 'Admin10', 't10-admin@example.com', 'Theta');
+    const ghost = new mongoose.Types.ObjectId().toString();
+
+    const res = await request(app)
+      .post(`/api/v1/teams/${team.id}/invitations`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: ghost, role: 'user' });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('re-inviting an existing user updates their pending role', async () => {
+    const app = createApp();
+    const { token, team } = await signupAdmin(app, 'Admin11', 't11-admin@example.com', 'Iota');
+    const member = await signupMember(app, 'Member11', 't11-user@example.com', 'user');
+
+    await request(app)
+      .post(`/api/v1/teams/${team.id}/invitations`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: member.user.id, role: 'user' });
+    const again = await request(app)
+      .post(`/api/v1/teams/${team.id}/invitations`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: member.user.id, role: 'manager' });
+
+    expect(again.status).toBe(201);
+
+    const invitations = await request(app)
+      .get('/api/v1/teams/me/invitations')
+      .set('Authorization', `Bearer ${member.token}`);
+    expect(invitations.body).toEqual([
+      expect.objectContaining({ teamId: team.id, role: 'manager' }),
+    ]);
+  });
+
+  it('rejects a duplicate member signup email', async () => {
+    const app = createApp();
+    await signupMember(app, 'Dup', 'dup-user@example.com', 'user');
+
+    const res = await request(app).post('/api/v1/auth/signup/user').send({
+      name: 'Dup2',
+      email: 'dup-user@example.com',
+      password: 'password123',
+      role: 'user',
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CONFLICT');
   });
 });

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import jwt from 'jsonwebtoken';
 import { hashPassword, verifyPassword } from '../../src/modules/auth/password';
 import { signToken, verifyToken } from '../../src/modules/auth/token';
+import { config } from '../../src/config';
 
 describe('password hashing', () => {
   it('hashes a password and round-trips a correct plaintext', async () => {
@@ -34,5 +36,10 @@ describe('JWT token', () => {
 
   it('rejects an empty token', () => {
     expect(() => verifyToken('')).toThrow();
+  });
+
+  it('rejects a token whose payload is not an object', () => {
+    const token = jwt.sign('just-a-string', config.jwtSecret);
+    expect(() => verifyToken(token)).toThrow(/malformed/i);
   });
 });
