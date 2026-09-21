@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { listNotifications, markNotificationRead, getNotification } from './repository';
 import { toNotificationDto } from './serializers';
-import { authGuard, requireTeam } from '../../middleware/auth';
+import { authGuard, requireTeam, resolveTeam } from '../../middleware/auth';
 import { NotFoundError } from '../../lib/errors';
 import { notificationTypeSchema } from '@pulse/shared-types';
 
 const router = Router();
 
-router.use(authGuard, requireTeam());
+router.use(authGuard, resolveTeam(), requireTeam());
 
 router.get('/', async (req, res) => {
   const unreadOnly = req.query.unread === 'true';

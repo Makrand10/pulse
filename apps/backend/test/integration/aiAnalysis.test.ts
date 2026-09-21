@@ -11,6 +11,8 @@ import { setClaudeClient, getClaudeClient, type ClaudeClient } from '../../src/m
 import { runAnalysis } from '../../src/modules/ai-analysis/graph';
 import { processAiAnalysisJob, type AiAnalysisJobData } from '../../src/modules/ai-analysis/queue';
 import { resetBreaker } from '../../src/modules/ai-analysis/breaker';
+import { resetDailyBudget } from '../../src/modules/ai-analysis/budget';
+import { config } from '../../src/config';
 import type { CheckStatus } from '@pulse/shared-types';
 
 let mongo: MongoMemoryServer;
@@ -211,6 +213,66 @@ describe('M6 DoD: incident creation path is never blocked by AI', () => {
     const result = await processAiAnalysisJob(fakeJob({ teamId, apiId, incidentId }, 0, 'open'));
     expect(result).toBeUndefined();
     expect(claudeCalls).toBe(callsWhileFailing); // no new Claude call
+    const stored = await Incident.findOne({ teamId });
+    expect(stored!.aiSummary).toBeNull();
+  });
+});
+
+describe('bill safety: provider calls are capped and kill-switchable', () => {
+  const mutableConfig = config as unknown as { aiDailyCallCap: number; aiEnabled: boolean };
+
+  beforeEach(() => {
+    resetDailyBudget();
+  });
+
+  afterEach(() => {
+    mutableConfig.aiDailyCallCap = 10;
+    mutableConfig.aiEnabled = true;
+    resetDailyBudget();
+  });
+
+  it('never calls the provider once the daily budget is exhausted', async () => {
+    const teamId = new Types.ObjectId().toString();
+    const { apiId, incidentId } = await openIncident(teamId);
+    await recordStatuses(teamId, apiId, ['DOWN', 'DOWN', 'DOWN']);
+
+    setClaudeClient({
+      async analyze() {
+        claudeCalls += 1;
+        return { summary: 'Saturation', suggestedCause: 'CPU', nextDebugStep: 'Check pods' };
+      },
+    });
+
+    mutableConfig.aiDailyCallCap = 1;
+
+    await processAiAnalysisJob(fakeJob({ teamId, apiId, incidentId }, 0, 'budget-1'));
+    expect(claudeCalls).toBe(1);
+
+    // Second delivery: budget (cap=1) is spent — provider must not be called.
+    await processAiAnalysisJob(fakeJob({ teamId, apiId, incidentId }, 0, 'budget-2'));
+    expect(claudeCalls).toBe(1);
+
+    const stored = await Incident.findOne({ teamId });
+    expect(stored!.aiSuggestedCause).toBeNull(); // blocked run persisted null
+  });
+
+  it('AI_ENABLED=false hard-stops analysis without calling the provider', async () => {
+    const teamId = new Types.ObjectId().toString();
+    const { apiId, incidentId } = await openIncident(teamId);
+    await recordStatuses(teamId, apiId, ['DOWN', 'DOWN', 'DOWN']);
+
+    setClaudeClient({
+      async analyze() {
+        claudeCalls += 1;
+        throw new Error('should never be called');
+      },
+    });
+
+    mutableConfig.aiEnabled = false;
+    const result = await processAiAnalysisJob(fakeJob({ teamId, apiId, incidentId }, 0, 'disabled'));
+    expect(result).toBeUndefined();
+    expect(claudeCalls).toBe(0);
+
     const stored = await Incident.findOne({ teamId });
     expect(stored!.aiSummary).toBeNull();
   });

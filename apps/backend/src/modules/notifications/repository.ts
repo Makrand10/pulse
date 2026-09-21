@@ -48,8 +48,14 @@ export async function updateEmailStatus(
   );
 }
 
-// Recipients are every team member's inbox (PRD: notify on incident events).
-export async function listTeamMemberEmails(teamId: string): Promise<string[]> {
-  const users = await User.find({ teamId }, { email: 1, _id: 0 }).lean();
+// Recipients are every team member's inbox, unless the API's alert rules pin a
+// subset (alertUserIds). The worker resolves the API and passes its rules so
+// "who gets notified per API" is honored end-to-end (M8).
+export async function listTeamMemberEmails(teamId: string, alertUserIds?: string[]): Promise<string[]> {
+  const filter: Record<string, unknown> = { teamId };
+  if (alertUserIds && alertUserIds.length > 0) {
+    filter._id = { $in: alertUserIds };
+  }
+  const users = await User.find(filter, { email: 1, _id: 0 }).lean();
   return users.map((u) => u.email);
 }

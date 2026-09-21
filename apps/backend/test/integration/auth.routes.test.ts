@@ -3,6 +3,7 @@ import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApp } from '../../src/app';
 import { connectDb, disconnectDb } from '../../src/lib/db';
+import { User } from '../../src/db/models/User';
 
 let mongo: MongoMemoryServer;
 
@@ -99,5 +100,51 @@ describe('auth HTTP routes', () => {
     const res = await request(app).get('/api/v1/nope');
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('rejects login for an email that does not exist', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'nobody@example.com', password: 'password123' });
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('logs in a member who has not joined a team (teamId null)', async () => {
+    const app = createApp();
+    await request(app).post('/api/v1/auth/signup/user').send({
+      name: 'Teamless',
+      email: 'teamless@example.com',
+      password: 'password123',
+      role: 'user',
+    });
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'teamless@example.com', password: 'password123' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.teamId).toBeNull();
+    expect(res.body.user.role).toBe('user');
+  });
+
+  it('backfills an admin token team from an owned team when unset', async () => {
+    const app = createApp();
+    await request(app).post('/api/v1/auth/signup').send({
+      name: 'Owner',
+      email: 'owner-noteam@example.com',
+      password: 'password123',
+      teamName: 'Noteam',
+    });
+    await User.updateOne({ email: 'owner-noteam@example.com' }, { $unset: { teamId: 1 } });
+
+    const res = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'owner-noteam@example.com', password: 'password123' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.teamId).toBeTruthy();
   });
 });

@@ -6,6 +6,8 @@ import { createApp } from '../../src/app';
 import { connectDb, disconnectDb } from '../../src/lib/db';
 import { Api } from '../../src/db/models/Api';
 import { CheckResult } from '../../src/db/models/CheckResult';
+import { User } from '../../src/db/models/User';
+import { Team } from '../../src/db/models/Team';
 import { applyIncidentEngine } from '../../src/modules/incidents/engine';
 import { Incident } from '../../src/db/models/Incident';
 import { DEFAULT_FAILURE_THRESHOLD, DEFAULT_SUCCESS_THRESHOLD } from '../../src/modules/incidents/stateMachine';
@@ -33,14 +35,19 @@ async function signupAndToken(email: string, teamName: string): Promise<string> 
 
 async function signupUser(teamId: string, email: string): Promise<string> {
   const app = createApp();
-  const signup = await request(app).post('/api/v1/auth/signup').send({
+  const signup = await request(app).post('/api/v1/auth/signup/user').send({
     name: 'Member',
     email,
     password: 'password123',
-    teamName: 'AnotherTeam',
+    role: 'user',
   });
-  const { userId } = signup.body.user;
-  return signToken({ sub: userId, email, teamId, role: 'member' });
+  const userId = signup.body.user.id as string;
+  await User.updateOne({ _id: userId }, { teamId, role: 'user' });
+  await Team.updateOne(
+    { _id: teamId },
+    { $push: { members: { userId, role: 'user', status: 'active' } } },
+  );
+  return signToken({ sub: userId, email, teamId, role: 'user' });
 }
 
 async function createApi(teamId: string): Promise<string> {
@@ -181,6 +188,38 @@ describe('incidents REST API', () => {
       .get('/api/v1/incidents?status=RESOLVED')
       .set('Authorization', `Bearer ${token}`);
     expect(openOnly.body).toHaveLength(0);
+  });
+
+  it('filters incidents by apiId (dashboard detail feed)', async () => {
+    const app = createApp();
+    const token = await signupAndToken('m4-f@example.com', 'IncidentFilter');
+    const login = await request(app).post('/api/v1/auth/login').send({
+      email: 'm4-f@example.com',
+      password: 'password123',
+    });
+    const teamId = login.body.user.teamId as string;
+    const apiA = await createApi(teamId);
+    const apiB = await createApi(teamId);
+
+    await recordStatuses(teamId, apiA, ['DOWN', 'DOWN', 'DOWN']);
+    await applyIncidentEngine({ apiId: apiA, teamId });
+    await recordStatuses(teamId, apiB, ['DOWN', 'DOWN', 'DOWN']);
+    await applyIncidentEngine({ apiId: apiB, teamId });
+
+    const all = await request(app).get('/api/v1/incidents').set('Authorization', `Bearer ${token}`);
+    expect(all.body).toHaveLength(2);
+
+    const filtered = await request(app)
+      .get(`/api/v1/incidents?apiId=${apiA}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(filtered.status).toBe(200);
+    expect(filtered.body).toHaveLength(1);
+    expect(filtered.body[0].apiId).toBe(apiA);
+
+    const none = await request(app)
+      .get(`/api/v1/incidents?apiId=${await createApi(teamId)}&status=OPEN`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(none.body).toHaveLength(0);
   });
 
   it('gets a single incident', async () => {

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import httpLogger from 'pino-http';
 import { router as apiRouter } from './routes';
+import statusRouter from './modules/status/routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { logger, newRequestId } from './lib/logger';
 import { getConnection } from './lib/db';
@@ -53,6 +54,9 @@ export function createApp() {
   });
 
   app.use('/api/v1', apiRouter);
+
+  // Public, unauthenticated status surface (rate-limited, allowlisted DTO).
+  app.use('/public', statusRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

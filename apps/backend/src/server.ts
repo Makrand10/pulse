@@ -2,12 +2,21 @@ import { config } from './config';
 import { logger } from './lib/logger';
 import { connectDb } from './lib/db';
 import { connectRedis } from './lib/redis';
+import { ensureSlugs } from './db/slugs';
 import { createApp } from './app';
+import { startUptimeRollupWorkflow } from './temporal/lifecycle';
 
 async function main() {
   await connectDb(config.mongoUri);
+  await ensureSlugs();
   await connectRedis(config.redisUrl);
   logger.info('mongo + redis connected');
+
+  // Hourly §6.4 uptime aggregation (idempotent; Temporal not required for the
+  // rest of the app to boot, so a missing server is only a warning).
+  startUptimeRollupWorkflow().catch((err) => {
+    logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'temporal unavailable; uptime rollup cron not started');
+  });
 
   const app = createApp();
   app.listen(config.port, () => {

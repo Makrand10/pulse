@@ -25,3 +25,6 @@ Thumbs.db
 
 # Misc
 *.tsbuildinfo
+
+# Local runtime data (mongod dbPath, logs)
+.local/

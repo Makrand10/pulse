@@ -2,7 +2,7 @@ import { proxyActivities, sleep, continueAsNew } from '@temporalio/workflow';
 import type * as activities from './activities';
 import type { PingApiResult } from './activities';
 
-const { pingApi, persistCheckResult, applyIncidentEngine } = proxyActivities<typeof activities>({
+const { pingApi, persistCheckResult, applyIncidentEngine, computeUptimeRollups } = proxyActivities<typeof activities>({
   startToCloseTimeout: '30 seconds',
   retry: {
     maximumAttempts: 3,
@@ -64,4 +64,11 @@ export async function healthCheckWorkflow(input: HealthCheckWorkflowInput): Prom
     await sleep(intervalSeconds * 1000);
     iterations++;
   }
+}
+
+// Cron-scheduled (§6.4): Temporal re-runs this workflow each hour (see
+// startUptimeRollupWorkflow). One activity call per tick folds the last hour of
+// checks into UptimeRollup buckets.
+export async function uptimeRollupWorkflow(): Promise<void> {
+  await computeUptimeRollups();
 }

@@ -14,6 +14,11 @@ monitoring data only**.
 
 ## Output format (JSON, one object — no markdown, no prose)
 
+Output ONLY a single JSON object and nothing else: no markdown code fences,
+no commentary, no trailing text. Values must not contain double-quote
+characters (paraphrase instead) and each value should stay under ~120
+characters so the response is compact.
+
 ```json
 {
   "summary": "one or two sentences describing the observed failure pattern",
