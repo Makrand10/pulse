@@ -6,7 +6,7 @@ export const userSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
     teamId: { type: Schema.Types.ObjectId, ref: 'Team', default: null },
-    role: { type: String, enum: ['admin', 'member'], default: 'member' },
+    role: { type: String, enum: ['admin', 'manager', 'user', 'member'], default: 'user' },
   },
   { timestamps: true },
 );

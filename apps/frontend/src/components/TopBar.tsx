@@ -5,20 +5,33 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
 export function TopBar() {
-  const { token, name, logout } = useAuth();
+  const { token, name, role, logout } = useAuth();
   const router = useRouter();
+  const isAdmin = role === 'admin';
 
   return (
     <header className="topbar">
       <div className="row">
-        <Link href={token ? '/apis' : '/'} className="brand">
+        <Link href={token ? (isAdmin ? '/admin' : '/home') : '/'} className="brand">
           Pulse
         </Link>
+        {token && (
+          <span className="chip" style={{ marginLeft: 8 }}>
+            {isAdmin ? 'Admin' : role === 'manager' ? 'Manager' : 'User'}
+          </span>
+        )}
       </div>
       <nav>
         {token ? (
           <>
-            <Link href="/apis">APIs</Link>
+            {isAdmin ? (
+              <>
+                <Link href="/admin">Teams</Link>
+                <Link href="/apis">APIs</Link>
+              </>
+            ) : (
+              <Link href="/home">Dashboard</Link>
+            )}
             <span className="user">{name ?? ''}</span>
             <Link
               href="/"
@@ -34,7 +47,7 @@ export function TopBar() {
         ) : (
           <>
             <Link href="/login">Log in</Link>
-            <Link href="/register">Sign up</Link>
+            <Link href="/admin/login">Admin</Link>
           </>
         )}
       </nav>

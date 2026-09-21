@@ -50,7 +50,7 @@ export async function listCheckResults(
 export async function getApiForWorker(apiId: string): Promise<ApiForWorker | null> {
   const api = await Api.findById(apiId).lean();
   if (!api) return null;
-  const { _id, teamId, name, url, method, expectedStatus, latencyThresholdMs, intervalSeconds, headers, authTokenEncrypted, body } = api as unknown as Record<string, unknown>;
+  const { _id, teamId, name, url, method, expectedStatus, latencyThresholdMs, intervalSeconds, headers, authTokenEncrypted, body, alertUserIds } = api as unknown as Record<string, unknown>;
   return {
     apiId: String(_id),
     teamId: String(teamId),
@@ -63,6 +63,7 @@ export async function getApiForWorker(apiId: string): Promise<ApiForWorker | nul
     headers: (headers ?? {}) as Record<string, string>,
     authTokenEncrypted: (authTokenEncrypted as string) ?? undefined,
     body: (body as string) ?? undefined,
+    alertUserIds: ((alertUserIds as unknown[]) ?? []).map(String),
   };
 }
 
@@ -78,6 +79,7 @@ export type ApiForWorker = {
   headers: Record<string, string>;
   authTokenEncrypted?: string;
   body?: string;
+  alertUserIds?: string[];
 };
 
 export type InferCheckResult = {

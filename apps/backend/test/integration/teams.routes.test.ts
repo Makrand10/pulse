@@ -4,8 +4,6 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createApp } from '../../src/app';
 import { connectDb, disconnectDb } from '../../src/lib/db';
 import { Team } from '../../src/db/models/Team';
-import { User } from '../../src/db/models/User';
-import { config } from '../../src/config';
 
 let mongo: MongoMemoryServer;
 
@@ -19,90 +17,116 @@ afterAll(async () => {
   if (mongo) await mongo.stop();
 });
 
-async function signup(app: ReturnType<typeof createApp>, name: string, email: string, teamName: string) {
+async function signupAdmin(app: ReturnType<typeof createApp>, name: string, email: string, teamName: string) {
   const res = await request(app).post('/api/v1/auth/signup').send({
     name,
     email,
     password: 'password123',
     teamName,
   });
-  return res.body as { token: string; user: { id: string; role: string } };
+  return res.body as { token: string; user: { id: string; role: string; teamId: string }; team: { id: string } };
 }
 
-describe('team invite route (admin only)', () => {
-  it('returns 201 with a token when an admin invites', async () => {
+async function signupMember(app: ReturnType<typeof createApp>, name: string, email: string, role: 'user' | 'manager') {
+  const res = await request(app).post('/api/v1/auth/signup/user').send({
+    name,
+    email,
+    password: 'password123',
+    role,
+  });
+  return res.body as { token: string; user: { id: string; role: string; teamId: string | null } };
+}
+
+describe('teams + invitations', () => {
+  it('admin signup creates a team they own; GET /teams lists it', async () => {
     const app = createApp();
-    const { token, user } = await signup(app, 'Admin', 'admin@example.com', 'Alpha');
+    const { token, team } = await signupAdmin(app, 'Admin', 't1-admin@example.com', 'Alpha');
 
-    const team = await Team.findOne({ name: 'Alpha' });
-    const teamId = String(team!._id);
+    const teamDoc = await Team.findById(team.id);
+    expect(teamDoc!.ownerId).toBeTruthy();
 
-    const res = await request(app)
-      .post(`/api/v1/teams/${teamId}/invite`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ role: 'member' });
-
-    expect(res.status).toBe(201);
-    expect(res.body.inviteToken).toBeTruthy();
-    expect(res.body.role).toBe('member');
-    expect(user.role).toBe('admin');
+    const res = await request(app).get('/api/v1/teams').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0]).toMatchObject({ id: team.id, name: 'Alpha', role: 'admin' });
   });
 
-  it('returns 403 when a member tries to invite (AC: no silent no-op)', async () => {
+  it('admin invites a registered user; the user accepts and joins the team', async () => {
     const app = createApp();
-    const { token } = await signup(app, 'Admin2', 'admin2@example.com', 'Beta');
-    void token;
+    const { token, team } = await signupAdmin(app, 'Admin2', 't2-admin@example.com', 'Beta');
+    const member = await signupMember(app, 'Manager', 't2-manager@example.com', 'manager');
 
-    const memberUser = await User.create({
-      name: 'Member',
-      email: 'member@example.com',
-      passwordHash: 'x',
-    });
+    // The pool of registered users is visible to admins.
+    const directory = await request(app)
+      .get('/api/v1/teams/directory')
+      .set('Authorization', `Bearer ${token}`);
+    expect(directory.status).toBe(200);
+    expect(directory.body.some((u: { email: string }) => u.email === 't2-manager@example.com')).toBe(true);
 
-    const team = await Team.findOne({ name: 'Beta' });
-    team!.members.push({ userId: memberUser._id, role: 'member' });
-    await team!.save();
+    const invite = await request(app)
+      .post(`/api/v1/teams/${team.id}/invitations`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userId: member.user.id, role: 'manager' });
+    expect(invite.status).toBe(201);
+    expect(invite.body.status).toBe('invited');
 
-    const memberToken = createMemberToken(memberUser._id.toString(), String(team!._id));
+    const invitations = await request(app)
+      .get('/api/v1/teams/me/invitations')
+      .set('Authorization', `Bearer ${member.token}`);
+    expect(invitations.status).toBe(200);
+    expect(invitations.body).toEqual([
+      expect.objectContaining({ teamId: team.id, teamName: 'Beta', role: 'manager' }),
+    ]);
+
+    const accept = await request(app)
+      .post(`/api/v1/teams/${team.id}/invitations/accept`)
+      .set('Authorization', `Bearer ${member.token}`);
+    expect(accept.status).toBe(200);
+    expect(accept.body.user).toMatchObject({ role: 'manager', teamId: team.id });
+
+    // Now an active member with a fresh token.
+    const members = await request(app)
+      .get('/api/v1/teams/members')
+      .set('Authorization', `Bearer ${accept.body.token}`)
+      .set('x-team-id', team.id);
+    expect(members.status).toBe(200);
+    expect(members.body.map((m: { email: string }) => m.email)).toContain('t2-manager@example.com');
+  });
+
+  it('rejects invites from non-admins with 403', async () => {
+    const app = createApp();
+    const { team } = await signupAdmin(app, 'Admin3', 't3-admin@example.com', 'Gamma');
+    const member = await signupMember(app, 'User', 't3-user@example.com', 'user');
 
     const res = await request(app)
-      .post(`/api/v1/teams/${team!._id}/invite`)
-      .set('Authorization', `Bearer ${memberToken}`)
-      .send({ role: 'member' });
+      .post(`/api/v1/teams/${team.id}/invitations`)
+      .set('Authorization', `Bearer ${member.token}`)
+      .send({ userId: member.user.id, role: 'user' });
 
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('FORBIDDEN');
   });
 
-  it('returns 404 when a user tries to invite to a team they do not belong to', async () => {
+  it('rejects invites to a team the admin does not administer', async () => {
     const app = createApp();
-    await signup(app, 'Admin3', 'admin3@example.com', 'Gamma');
+    await signupAdmin(app, 'Admin4', 't4-admin@example.com', 'Delta');
     const otherTeam = await Team.create({ name: 'Unrelated' });
-
-    const { token } = await signup(app, 'Admin4', 'admin4@example.com', 'Delta');
+    const { token } = await signupAdmin(app, 'Admin5', 't5-admin@example.com', 'Epsilon');
+    const member = await signupMember(app, 'User5', 't5-user@example.com', 'user');
 
     const res = await request(app)
-      .post(`/api/v1/teams/${otherTeam._id}/invite`)
+      .post(`/api/v1/teams/${otherTeam._id}/invitations`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ role: 'admin' });
+      .send({ userId: member.user.id, role: 'user' });
 
-    expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('NOT_FOUND');
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
   });
 
   it('requires authentication (401 without a token)', async () => {
     const app = createApp();
-    const res = await request(app).post(`/api/v1/teams/whatever/invite`).send({});
+    const res = await request(app).get('/api/v1/teams');
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('UNAUTHORIZED');
   });
 });
-
-function createMemberToken(userId: string, teamId: string) {
-  const jwt = require('jsonwebtoken');
-  return jwt.sign(
-    { sub: userId, email: 'member@example.com', teamId, role: 'member' },
-    config.jwtSecret,
-    { expiresIn: '7d' },
-  );
-}

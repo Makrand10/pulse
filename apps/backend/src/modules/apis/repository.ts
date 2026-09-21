@@ -1,6 +1,7 @@
 import { Api, type ApiDoc } from '../../db/models/Api';
 import { encryptSecret } from './crypto';
 import { NotFoundError } from '../../lib/errors';
+import { uniqueSlug } from '../../db/slugs';
 import type { ApiCreateInput, ApiUpdateInput } from '@pulse/shared-types';
 
 type StoredApiInput = Omit<ApiCreateInput, 'authToken'> & { authTokenEncrypted?: string };
@@ -15,11 +16,23 @@ function prepareDoc(input: ApiCreateInput): StoredApiInput {
 }
 
 export async function createApi(teamId: string, input: ApiCreateInput): Promise<ApiDoc> {
-  return Api.create({ teamId, ...prepareDoc(input) });
+  const { alertUserIds, ...rest } = input;
+  return Api.create({
+    teamId,
+    slug: await uniqueSlug(Api, { teamId }, input.name),
+    alertUserIds: (alertUserIds ?? []) as never,
+    ...prepareDoc(rest),
+  });
 }
 
 export async function listApis(teamId: string): Promise<ApiDoc[]> {
   return Api.find({ teamId }).sort({ createdAt: -1 });
+}
+
+// Admin dashboards span every team they own.
+export async function listApisForTeams(teamIds: string[]): Promise<ApiDoc[]> {
+  if (teamIds.length === 0) return [];
+  return Api.find({ teamId: { $in: teamIds } }).sort({ createdAt: -1 });
 }
 
 export async function getApi(teamId: string, apiId: string): Promise<ApiDoc> {

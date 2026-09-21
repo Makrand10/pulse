@@ -4,12 +4,14 @@ import { NativeConnection, Worker } from '@temporalio/worker';
 import { config } from '../config';
 import { connectDb } from '../lib/db';
 import { connectRedis } from '../lib/redis';
+import { ensureSlugs } from '../db/slugs';
 import { logger } from '../lib/logger';
 import { TASK_QUEUE } from './shared';
 import * as activities from './activities';
 
 async function main(): Promise<void> {
   await connectDb(config.mongoUri);
+  await ensureSlugs();
   await connectRedis(config.redisUrl);
 
   const connection = await NativeConnection.connect({

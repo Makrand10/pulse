@@ -1,12 +1,29 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import { apiCreateSchema } from '@pulse/shared-types';
-import { fetchJson, type ApiDto } from '@/lib/api';
+import { fetchJson, type ApiDto, type TeamDto } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 
 export default function NewApiPage() {
   const router = useRouter();
+  const { token, role, activeTeamId, setActiveTeam } = useAuth();
+  const [teamId, setTeamId] = useState<string>(activeTeamId ?? '');
+  const { data: teams } = useSWR<TeamDto[]>(token && role === 'admin' ? '/api/v1/teams' : null);
+
+  useEffect(() => {
+    if (!token) router.replace('/admin/login');
+    else if (role && role !== 'admin') router.replace('/home');
+  }, [token, role, router]);
+
+  useEffect(() => {
+    if (teams && teams.length > 0 && !teamId) {
+      setTeamId(activeTeamId && teams.some((t) => t.id === activeTeamId) ? activeTeamId : teams[0]!.id);
+    }
+  }, [teams, activeTeamId, teamId]);
+
   const [form, setForm] = useState({
     name: '',
     url: '',
@@ -28,6 +45,11 @@ export default function NewApiPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!teamId) {
+      setError('Select a team for this API');
+      return;
+    }
 
     const parsed = apiCreateSchema.safeParse({
       name: form.name,
@@ -51,8 +73,9 @@ export default function NewApiPage() {
     try {
       const created = await fetchJson<ApiDto>('/api/v1/apis', {
         method: 'POST',
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify({ ...parsed.data, teamId }),
       });
+      setActiveTeam(teamId);
       router.push(`/apis/${created.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create API');
@@ -67,6 +90,16 @@ export default function NewApiPage() {
       <p className="muted">Pulse will begin monitoring this endpoint on an interval.</p>
 
       <form onSubmit={onSubmit}>
+        <label htmlFor="team">Team</label>
+        <select id="team" value={teamId} onChange={(e) => setTeamId(e.target.value)} required>
+          {(!teams || teams.length === 0) && <option value="">No teams available</option>}
+          {(teams ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+
         <label htmlFor="name">Name</label>
         <input id="name" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Payments API" required />
 

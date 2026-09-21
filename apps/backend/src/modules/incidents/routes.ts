@@ -7,12 +7,12 @@ import {
 } from './repository';
 import { toIncidentDto } from './serializers';
 import { incidentCommentSchema, incidentStatusUpdateSchema, incidentStatusSchema } from '@pulse/shared-types';
-import { authGuard, requireTeam, adminOnly } from '../../middleware/auth';
+import { authGuard, requireTeam, managerOrAdmin, resolveTeam } from '../../middleware/auth';
 import { NotFoundError, ConflictError } from '../../lib/errors';
 
 const router = Router();
 
-router.use(authGuard, requireTeam());
+router.use(authGuard, resolveTeam(), requireTeam());
 
 router.get('/', async (req, res) => {
   const rawStatus = req.query.status;
@@ -40,7 +40,7 @@ router.post('/:incidentId/comments', async (req, res) => {
   res.json(toIncidentDto(updated!));
 });
 
-router.patch('/:incidentId', adminOnly, async (req, res) => {
+router.patch('/:incidentId', managerOrAdmin, async (req, res) => {
   const { status } = incidentStatusUpdateSchema.parse(req.body);
   const incident = await getIncident(req.teamId!, String(req.params.incidentId));
   if (!incident) throw new NotFoundError('Incident not found');
@@ -51,7 +51,7 @@ router.patch('/:incidentId', adminOnly, async (req, res) => {
     req.teamId!,
     String(req.params.incidentId),
     status,
-    `Status changed to ${status} by admin`,
+    `Status changed to ${status}`,
     req.userId,
   );
   res.json(toIncidentDto(updated!));

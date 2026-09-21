@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export type Role = 'admin' | 'member';
+// admin   — owns teams: creates teams, registers APIs, invites members
+// manager — a team member who can view, comment and resolve incidents
+// user    — a team member who can view and comment only
+// member  — legacy alias kept for already-issued tokens/rows (treated as user)
+export type Role = 'admin' | 'manager' | 'user' | 'member';
 
 export const incidentStatusSchema = z.enum(['OPEN', 'INVESTIGATING', 'RESOLVED']);
 export type IncidentStatus = z.infer<typeof incidentStatusSchema>;
@@ -38,6 +42,7 @@ export const apiCreateSchema = z.object({
   body: z.string().max(65536).optional(),
   isActive: z.boolean().default(true),
   isPublic: z.boolean().default(false),
+  alertUserIds: z.array(z.string().min(1)).max(200).optional(),
 });
 
 export const apiUpdateSchema = apiCreateSchema.partial();
@@ -57,6 +62,7 @@ export interface ApiConfig {
   body?: string;
   isActive: boolean;
   isPublic: boolean;
+  alertUserIds?: string[];
 }
 
 export interface LatestCheck {

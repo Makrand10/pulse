@@ -4,6 +4,7 @@ import type { ApiConfig } from '@pulse/shared-types';
 export interface ApiDto {
   id: string;
   teamId: string;
+  slug: string;
   name: string;
   url: string;
   method: 'GET' | 'POST' | 'HEAD';
@@ -15,6 +16,7 @@ export interface ApiDto {
   hasAuthToken: boolean;
   isActive: boolean;
   isPublic: boolean;
+  alertUserIds: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +41,7 @@ export function toApiDto(api: ApiDoc): ApiDto {
   return {
     id: String(api._id),
     teamId: String(api.teamId),
+    slug: api.slug ?? '',
     name: config.name,
     url: config.url,
     method: config.method,
@@ -50,6 +53,7 @@ export function toApiDto(api: ApiDoc): ApiDto {
     hasAuthToken: Boolean(api.authTokenEncrypted),
     isActive: api.isActive,
     isPublic: api.isPublic,
+    alertUserIds: (api.alertUserIds ?? []).map(String),
     createdAt: api.createdAt?.toISOString() ?? '',
     updatedAt: api.updatedAt?.toISOString() ?? '',
   };

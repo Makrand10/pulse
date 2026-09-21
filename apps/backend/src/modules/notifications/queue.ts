@@ -71,10 +71,13 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   if (!notification || notification.emailStatus === 'SENT') return;
 
   const incident = await getIncident(teamId, String(notification.incidentId));
-  const apiName = incident ? (await getApiForWorker(String(incident.apiId)))?.name ?? 'Unknown API' : 'Unknown API';
+  const apiRef = incident ? await getApiForWorker(String(incident.apiId)) : null;
+  const apiName = apiRef?.name ?? 'Unknown API';
 
   const attempts = (job.attemptsMade ?? 0) + 1;
-  const to = await listTeamMemberEmails(teamId);
+  // Alert rules: when the API pins alertUserIds, only those team members are
+  // notified; otherwise everyone on the team gets the email (M8).
+  const to = await listTeamMemberEmails(teamId, apiRef?.alertUserIds);
   const { subject, html } = buildEmail(notification.type, {
     apiName,
     startedAt: incident?.startedAt ?? new Date(),

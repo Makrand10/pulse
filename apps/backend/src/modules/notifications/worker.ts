@@ -1,5 +1,6 @@
 import { startNotificationWorker } from './queue';
 import { connectDb } from '../../lib/db';
+import { ensureSlugs } from '../../db/slugs';
 import { config } from '../../config';
 import { logger } from '../../lib/logger';
 
@@ -7,6 +8,7 @@ import { logger } from '../../lib/logger';
 // API server or the Temporal worker.
 async function main(): Promise<void> {
   await connectDb(config.mongoUri);
+  await ensureSlugs();
   const worker = await startNotificationWorker();
   logger.info(`notification worker listening on queue "${config.notifyQueueName}"`);
 

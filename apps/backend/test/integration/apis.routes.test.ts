@@ -5,6 +5,8 @@ import { createApp } from '../../src/app';
 import { connectDb, disconnectDb } from '../../src/lib/db';
 import { signToken } from '../../src/modules/auth/token';
 import { CheckResult } from '../../src/db/models/CheckResult';
+import { User } from '../../src/db/models/User';
+import { Team } from '../../src/db/models/Team';
 import { computeHourlyUptimeRollups } from '../../src/modules/healthchecks/repository';
 
 let mongo: MongoMemoryServer;
@@ -23,14 +25,19 @@ async function signupAndToken(email: string, teamName: string): Promise<string> 
 
 async function signupUser(teamId: string, email: string): Promise<string> {
   const app = createApp();
-  const signup = await request(app).post('/api/v1/auth/signup').send({
+  const signup = await request(app).post('/api/v1/auth/signup/user').send({
     name: 'Member',
     email,
     password: 'password123',
-    teamName: 'AnotherTeam',
+    role: 'user',
   });
-  const { userId } = signup.body.user;
-  return signToken({ sub: userId, email, teamId, role: 'member' });
+  const userId = signup.body.user.id as string;
+  await User.updateOne({ _id: userId }, { teamId, role: 'user' });
+  await Team.updateOne(
+    { _id: teamId },
+    { $push: { members: { userId, role: 'user', status: 'active' } } },
+  );
+  return signToken({ sub: userId, email, teamId, role: 'user' });
 }
 
 beforeAll(async () => {

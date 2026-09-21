@@ -8,8 +8,8 @@ import { timeAgo } from '@/lib/format';
 
 export function IncidentFeed({ apiId }: { apiId: string }) {
   const { token, role } = useAuth();
-  const isAdmin = role === 'admin';
-  const { data: incidents, mutate } = useSWR<IncidentDto[]>(
+  const canResolve = role === 'admin' || role === 'manager';
+  const { data: incidents, error, isLoading, mutate } = useSWR<IncidentDto[]>(
     token ? `/api/v1/incidents?apiId=${apiId}` : null,
     { refreshInterval: 30_000 },
   );
@@ -17,22 +17,22 @@ export function IncidentFeed({ apiId }: { apiId: string }) {
   return (
     <div className="card">
       <h2>Incidents</h2>
-      {!incidents || incidents.length === 0 ? (
-        <p className="muted">No incidents for this API.</p>
-      ) : (
-        incidents.map((inc) => <IncidentRow key={inc.id} inc={inc} isAdmin={isAdmin} onMutate={mutate} />)
-      )}
+      {isLoading && <p className="muted">Loading incidents…</p>}
+      {error && <p className="formError">{error.message}</p>}
+      {incidents && incidents.length === 0 && <p className="muted">No incidents for this API.</p>}
+      {incidents &&
+        incidents.map((inc) => <IncidentRow key={inc.id} inc={inc} canResolve={canResolve} onMutate={mutate} />)}
     </div>
   );
 }
 
 function IncidentRow({
   inc,
-  isAdmin,
+  canResolve,
   onMutate,
 }: {
   inc: IncidentDto;
-  isAdmin: boolean;
+  canResolve: boolean;
   onMutate: () => void;
 }) {
   const [comment, setComment] = useState('');
@@ -79,7 +79,7 @@ function IncidentRow({
           <span className={`chip ${inc.status}`}>{inc.status}</span>
           <span className="muted">opened {timeAgo(inc.startedAt)}</span>
         </div>
-        {inc.status !== 'RESOLVED' && isAdmin && (
+        {inc.status !== 'RESOLVED' && canResolve && (
           <button className="secondary" onClick={resolve} disabled={busy}>
             Mark resolved
           </button>

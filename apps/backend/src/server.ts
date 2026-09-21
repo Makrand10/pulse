@@ -2,11 +2,13 @@ import { config } from './config';
 import { logger } from './lib/logger';
 import { connectDb } from './lib/db';
 import { connectRedis } from './lib/redis';
+import { ensureSlugs } from './db/slugs';
 import { createApp } from './app';
 import { startUptimeRollupWorkflow } from './temporal/lifecycle';
 
 async function main() {
   await connectDb(config.mongoUri);
+  await ensureSlugs();
   await connectRedis(config.redisUrl);
   logger.info('mongo + redis connected');
 

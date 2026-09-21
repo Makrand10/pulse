@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
-export default function LoginPage() {
+export default function AdminLoginPage() {
   const { login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -19,7 +19,11 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const role = await login(email, password);
-      router.push(role === 'admin' ? '/admin' : '/home');
+      if (role !== 'admin') {
+        setError('This account is not an admin. Use the user/manager log in instead.');
+        return;
+      }
+      router.push('/admin');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -29,29 +33,15 @@ export default function LoginPage() {
 
   return (
     <div className="card" style={{ maxWidth: 420, margin: '60px auto' }}>
-      <h1>User &amp; manager log in</h1>
+      <h1>Admin log in</h1>
       <p className="muted" style={{ marginTop: 0 }}>
-        For team members who were invited by an admin.
+        For team owners who register APIs and invite members.
       </p>
       <form onSubmit={onSubmit}>
         <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoComplete="email"
-        />
+        <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
         <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          autoComplete="current-password"
-        />
+        <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
         {error && <p className="formError">{error}</p>}
         <p style={{ marginTop: 16 }}>
           <button type="submit" disabled={submitting}>
@@ -60,10 +50,10 @@ export default function LoginPage() {
         </p>
       </form>
       <p className="muted">
-        No account? <Link href="/register">Sign up</Link>.
+        New team? <Link href="/admin/register">Register a team</Link>.
       </p>
       <p className="muted">
-        Team owner? <Link href="/admin/login">Admin log in</Link>.
+        Not an admin? <Link href="/login">User/manager log in</Link>.
       </p>
     </div>
   );
