@@ -1,6 +1,9 @@
 import type { UptimeStats, LatestCheck } from '@pulse/shared-types';
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+// When unset the app calls the API through the same origin (Next proxies
+// /api/* to the backend); set this to a full URL to split frontend/backend
+// on different hosts.
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 export const TOKEN_KEY = 'pulse_token';
 export const ACTIVE_TEAM_KEY = 'pulse_active_team_id';
 

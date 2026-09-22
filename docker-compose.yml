@@ -1,66 +1,130 @@
+# Pulse full stack — one-command deployment with Docker.
+#
+#   cp .env.example .env        # fill in JWT_SECRET, ENCRYPTION_KEY and the rest
+#   docker compose up -d --build
+#
+# Then open http://localhost:3000. The frontend proxies /api/* to the backend,
+# so the API port does not need to be public.
+#
+# Required in .env: JWT_SECRET, ENCRYPTION_KEY (see .env.example).
+# Optional: PULSE_FRONTEND_PORT / PULSE_API_PORT to remap host ports.
+
+name: pulse
+
 services:
   mongo:
     image: mongo:7
-    container_name: pulse-mongo
-    ports:
-      - '27017:27017'
+    restart: unless-stopped
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   redis:
-    image: redis:7
-    container_name: pulse-redis
-    ports:
-      - '6379:6379'
-
-  temporal:
-    image: temporalio/auto-setup:latest
-    container_name: pulse-temporal
-    depends_on:
-      - temporal-db
-      - temporal-elasticsearch
-    environment:
-      - DB=postgresql
-      - DB_PORT=5432
-      - POSTGRES_USER=temporal
-      - POSTGRES_PWD=temporal
-      - POSTGRES_SEEDS=temporal-db
-      - ENABLE_ES=true
-      - ES_SEEDS=temporal-elasticsearch
-      - ES_VERSION=v7
-    ports:
-      - '7233:7233'
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   temporal-db:
     image: postgres:15
-    container_name: pulse-temporal-db
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=temporal
-      - POSTGRES_PWD=temporal
-      - POSTGRES_DB=temporal
-    ports:
-      - '5432:5432'
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_DB: temporal
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U temporal']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
-  temporal-elasticsearch:
-    image: elasticsearch:7.16.3
-    container_name: pulse-temporal-es
-    environment:
-      - discovery.type=single-node
-      - ES_JAVA_OPTS=-Xms256m -Xmx256m
-      - xpack.security.enabled=false
-    ports:
-      - '9200:9200'
-
-  temporal-ui:
-    image: temporalio/ui:latest
-    container_name: pulse-temporal-ui
+  temporal:
+    image: temporalio/auto-setup:latest
+    restart: unless-stopped
     depends_on:
-      - temporal
+      temporal-db:
+        condition: service_healthy
     environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+      DB: postgresql
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-db
+      ENABLE_ES: 'false'
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongo:27017/pulse
+      REDIS_URL: redis://redis:6379
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set in .env}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      EMAIL_FROM: ${EMAIL_FROM:-Pulse <alerts@pulse.dev>}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-groq}
+      AI_ENABLED: ${AI_ENABLED:-true}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_MAX_TOKENS: ${AI_MAX_TOKENS:-700}
+      AI_DAILY_CALL_CAP: ${AI_DAILY_CALL_CAP:-10}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
-      - '8080:8080'
+      # Only needed to hit the API directly; the web app proxies /api/* itself.
+      - '${PULSE_API_PORT:-4000}:4000'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"require('node:net').connect(4000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        # Empty => browser talks to the same origin; BACKEND_INTERNAL_URL tells
+        # Next where to proxy /api/*. Set to a public backend base URL to split
+        # the two apps onto different hosts (then rebuild).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      # Runtime value used by next.config.js rewrites (proxying /api/*).
+      BACKEND_INTERNAL_URL: http://backend:4000
+    ports:
+      - '${PULSE_FRONTEND_PORT:-3000}:3000'
 
 volumes:
   mongo-data:
