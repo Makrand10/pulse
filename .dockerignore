@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+.next
+dist
+coverage
+.local
+prd_extracted.txt
+**/*.log
+.git
+.gitignore
+.dockerfile*
+.pulse*
+apps/**/.next
+apps/**/dist
+apps/backend/coverage
