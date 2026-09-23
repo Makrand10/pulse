@@ -5,6 +5,9 @@ COPY package.json package-lock.json ./
 COPY apps/backend/package.json apps/backend/package.json
 COPY apps/frontend/package.json apps/frontend/package.json
 COPY packages/shared-types/package.json packages/shared-types/package.json
+COPY tsconfig.base.json ./
+COPY packages/shared-types/tsconfig.json packages/shared-types/tsconfig.json
+COPY packages/shared-types/src packages/shared-types/src
 RUN npm ci
 
 FROM deps AS build
@@ -24,6 +27,7 @@ COPY --from=deps /pulse/apps/backend/package.json ./apps/backend/package.json
 COPY --from=build /pulse/packages/shared-types ./packages/shared-types
 COPY --from=build /pulse/apps/backend/dist ./apps/backend/dist
 COPY apps/backend/docker-entrypoint.js ./apps/backend/docker-entrypoint.js
+COPY prompts ./prompts
 WORKDIR /pulse/apps/backend
 EXPOSE 4000
 CMD ["node", "docker-entrypoint.js"]

@@ -16,7 +16,10 @@ async function getClient(): Promise<Client> {
     clientPromise = (async () => {
       const connection = await Connection.connect({ address: config.temporalAddress });
       return new Client({ connection, namespace: config.temporalNamespace });
-    })();
+    })().catch((err) => {
+      clientPromise = null;
+      throw err;
+    });
   }
   return clientPromise;
 }

@@ -122,9 +122,15 @@ the browser only talks to the frontend, which proxies `/api/*` to the backend.
 
 Notes:
 - `PULSE_FRONTEND_PORT` / `PULSE_API_PORT` remap the exposure (default 3000/4000).
+- Sanity checks: `curl http://localhost:4000/healthz` (API up) and
+  `curl http://localhost:4000/readyz` (Mongo + Redis checks, returns 200 only when
+  `services_healthy` is satisfied).
+- The backend image bundles the AI root-cause prompt from `prompts/root-cause-v1.md`
+  (`COPY prompts ./prompts`) so the ai-worker can load it inside the container.
 - For HTTPS, put Caddy/Nginx in front of port 3000 and set `APP_BASE_URL`.
 - To split the apps across hosts (e.g., frontend on Vercel, backend on Render),
-  rebuild the frontend with `--build-arg NEXT_PUBLIC_API_URL=<public backend base>`.
+  rebuild the frontend with `--build-arg NEXT_PUBLIC_API_URL=<public backend base>`
+  and set `BACKEND_INTERNAL_URL=<public backend base>`.
 - `docker compose down` stops everything; Mongo data persists in a named volume.
 
 ## Roadmap
@@ -142,4 +148,4 @@ See [PRD](API-Reliability-Platform-PRD-v2.pdf) — exec plan in §9 (M0–M9).
 | M6 AI root-cause | `feat/ai-incident-analysis` | ✅ |
 | M7 Dashboard | `feat/dashboard` | ✅ |
 | M8 Public status page | `feat/public-status-and-alerts` | ✅ |
-| M9 Deployment & docs | `chore/deployment-and-docs` | 🚧 |
+| M9 Deployment & docs | `chore/deployment-and-docs` | ✅ |

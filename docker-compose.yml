@@ -38,6 +38,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
       POSTGRES_PWD: temporal
       POSTGRES_DB: temporal
     healthcheck:
@@ -54,7 +55,7 @@ services:
       temporal-db:
         condition: service_healthy
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
       POSTGRES_PWD: temporal
@@ -116,6 +117,7 @@ services:
         # Next where to proxy /api/*. Set to a public backend base URL to split
         # the two apps onto different hosts (then rebuild).
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        BACKEND_INTERNAL_URL: http://backend:4000
     restart: unless-stopped
     depends_on:
       backend:
