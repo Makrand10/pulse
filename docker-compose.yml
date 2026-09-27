@@ -96,7 +96,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       # Only needed to hit the API directly; the web app proxies /api/* itself.
-      - '${PULSE_API_PORT:-4000}:4000'
+      # BACKEND_HOST_IP locks the API to localhost on public deploys.
+      - '${BACKEND_HOST_IP:-0.0.0.0}:${PULSE_API_PORT:-4000}:4000'
     healthcheck:
       test:
         [

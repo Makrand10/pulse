@@ -1,0 +1,20 @@
+# Production overlay — use on a public host (Oracle Always Free VM, etc.).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# What this overlay does: give Temporal's Postgres a named volume so workflow
+# history survives restarts (NOT persisted in the base file — fine locally,
+# fatal on a real host).
+#
+# Port exposure is configured via .env, not here (compose merges port lists by
+# appending, so an overlay can't cleanly replace them). On a public host set:
+#   PULSE_FRONTEND_PORT=80          # http://<host> with no port in the URL
+#   BACKEND_HOST_IP=127.0.0.1       # keep the API private; frontend proxies it
+
+services:
+  temporal-db:
+    volumes:
+      - temporal-db-data:/var/lib/postgresql/data
+
+volumes:
+  temporal-db-data:

@@ -133,6 +133,47 @@ Notes:
   and set `BACKEND_INTERNAL_URL=<public backend base>`.
 - `docker compose down` stops everything; Mongo data persists in a named volume.
 
+### Oracle Cloud Always Free (permanent free host)
+
+The only mainstream "free forever, always-on" host big enough for Temporal.
+2 ARM OCPUs / 12 GB RAM, 200 GB storage, never expires (halved from 4/24 in
+June 2026). A credit/debit card is required for *identity verification only*
+(a ~$1 temporary hold, refunded) — nothing is charged on the Always Free tier.
+
+1. Sign up at <https://signup.oraclecloud.com> → **Create account** (choose home
+   region carefully; ARM capacity is tight in some regions — retry if allocation
+   errors).
+2. Console → **Compute → Instances → Create instance**: Name `pulse`, *Image =
+   Ubuntu 22.04*, *Shape = Ampere (ARM) 2 OCPU/12 GB*, enable the default VCN.
+   Save the SSH key pair — you'll need the private key to log in.
+3. **Security list** (VCN → Security Lists → Default): add an *Ingress* rule for
+   `TCP 80` (HTTP) and `TCP 22` (SSH), source `0.0.0.0/0`. Add `443` only if you
+   later add a domain + TLS.
+4. From your local machine:
+   ```bash
+   ssh -i ~/.ssh/pulse-key ubuntu@<VM_PUBLIC_IP>
+   git clone https://github.com/Makrand10/pulse.git
+   cd pulse
+   sudo bash scripts/deploy/deploy.sh      # installs Docker, generates .env, deploys
+   ```
+5. Open `http://<VM_PUBLIC_IP>` — sign up an admin, add monitors, go.
+
+Notes:
+- The overlay `docker-compose.prod.yml` persists Temporal's Postgres (workflow
+  history survives reboots). `deploy.sh` writes a production `.env`
+  (`PULSE_FRONTEND_PORT=80`, `BACKEND_HOST_IP=127.0.0.1`) so the app is served
+  at `http://<ip>` with no port and the backend API is bound to localhost only —
+  the browser always goes through the frontend, which proxies `/api/*`.
+- First build takes a few minutes (compiles backend + Next.js standalone inside
+  the VM). Later deploys are incremental.
+- For HTTPS with a real domain: point a domain at the VM, then either front it
+  with a Caddy/Nginx container or use the `cloudflared` tunnel — add a
+  `caddy` service with `domain:xxx` and set `APP_BASE_URL=https://xxx`. Without
+  a domain, stay on plain HTTP (no TLS).
+- Uptime: Oracle reclaims *idle* Always Free instances only if they sit unused
+  for weeks; activity like health checks keeps it alive. Add a cron
+  `curl http://127.0.0.1:4000/healthz` every minute if you ever pause traffic.
+
 ## Roadmap
 
 See [PRD](API-Reliability-Platform-PRD-v2.pdf) — exec plan in §9 (M0–M9).
