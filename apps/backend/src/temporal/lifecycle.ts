@@ -14,7 +14,10 @@ let clientPromise: Promise<Client> | null = null;
 async function getClient(): Promise<Client> {
   if (!clientPromise) {
     clientPromise = (async () => {
-      const connection = await Connection.connect({ address: config.temporalAddress });
+      const connection = await Connection.connect({
+        address: config.temporalAddress,
+        tls: config.temporalTls ? {} : false,
+      });
       return new Client({ connection, namespace: config.temporalNamespace });
     })().catch((err) => {
       clientPromise = null;

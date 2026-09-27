@@ -16,6 +16,7 @@ async function main(): Promise<void> {
 
   const connection = await NativeConnection.connect({
     address: config.temporalAddress,
+    tls: config.temporalTls ? {} : false,
   });
 
   // ts-node-dev runs from src/, prod runs from build/dist. Pick whichever exists.

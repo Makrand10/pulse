@@ -23,6 +23,7 @@ export const config = {
   encryptionKey: requiredEnv('ENCRYPTION_KEY'),
   temporalAddress: optionalEnv('TEMPORAL_ADDRESS', 'localhost:7233'),
   temporalNamespace: optionalEnv('TEMPORAL_NAMESPACE', 'default'),
+  temporalTls: optionalEnv('TEMPORAL_TLS', 'false') === 'true',
   resendApiKey: optionalEnv('RESEND_API_KEY', ''),
   emailFrom: optionalEnv('EMAIL_FROM', 'Pulse <alerts@pulse.dev>'),
   appBaseUrl: optionalEnv('APP_BASE_URL', 'http://localhost:3000'),
