@@ -109,11 +109,15 @@ COPY --from=rest-proxy /out/temporal-rest-proxy /usr/local/bin/temporal-rest-pro
 # collide with 127.0.0.1:10000. entrypoint.sh refuses to start if they match.
 #
 # BIND_ON_IP is 127.0.0.1, NOT 0.0.0.0: every Temporal service is in this one
-# container and talks over loopback, so gRPC must not bind Render's network.
-# A wildcard bind also forces membership to advertise the container's ephemeral
-# private IP, which the single-node ring then cannot reach ("Current reachable
-# members ... addresses: []") and the server shuts down. The public HTTP surface
-# is the health front door on 0.0.0.0:$PORT below, which is unaffected.
+# container and talks over loopback, so gRPC must not bind Render's network. It
+# is also the value Temporal 1.25.2 uses for the ringpop listen address
+# (common/membership/ringpop: getListenIP() reads services.*.rpc.bindOnIP), and
+# a wildcard bind would make the single node advertise Render's ephemeral
+# private IP, which it cannot then reach - "Current reachable members ...
+# addresses: []" - and Temporal shuts down. entrypoint.sh PINS this to loopback
+# rather than defaulting to it, because the platform environment overrides this
+# ENV and this service is documented with BIND_ON_IP=0.0.0.0. The public HTTP
+# surface is the health front door on 0.0.0.0:$PORT below, which is unaffected.
 ENV NODE_ENV=production \
     PORT=8080 \
     BIND_ON_IP=127.0.0.1 \

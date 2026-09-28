@@ -29,46 +29,53 @@ REST_PROXY_PORT="${REST_PROXY_PORT:-10000}"
 TEMPORAL_START_TIMEOUT_SECONDS="${TEMPORAL_START_TIMEOUT_SECONDS:-180}"
 WORKER_START_GRACE_SECONDS="${WORKER_START_GRACE_SECONDS:-8}"
 
-# Temporal only ever talks to itself here: frontend, history, matching, the
-# server's own system worker, the Pulse worker and the REST proxy are all in this
-# one container, and gRPC is never exposed to Render.
+# ---- membership: one node, pinned to loopback -----------------------------
+# Everything in this container talks to everything else over loopback: Temporal
+# frontend/history/matching/worker, the server's own system worker, the Pulse
+# worker and the REST proxy. Render only ever reaches the health front door.
 #
-# BIND_ON_IP must therefore be loopback, NOT the 0.0.0.0 wildcard. A wildcard
-# bind obliges Temporal to advertise a broadcast address, and the only usable
-# value is this container's ephemeral private IP (10.24.x.x on Render). Membership
-# then advertises that IP for the whole host, the ring cannot reach even the one
-# local member ("Current reachable members ... addresses: []", "Not enough hosts
-# to serve the request"), and the server shuts itself down. Loopback cannot fail
-# that way, and it keeps the ring a genuine single node.
-export BIND_ON_IP="${BIND_ON_IP:-127.0.0.1}"
+# How Temporal 1.25.2 turns config into a ring (common/membership/ringpop):
+#
+#   1. factory.getListenIP() reads services.*.rpc.bindOnIP - and ONLY that. The
+#      ringpop listener is then net.Listen("tcp", <bindOnIP>:<membershipPort>).
+#   2. factory.broadcastAddressResolver() returns <broadcastAddress>:<port>,
+#      falling back to the ringpop listener's own address when it is empty.
+#   3. monitor.startHeartbeat() writes that address to the cluster_membership
+#      table, and splitHostPortTyped() requires a literal IP - a hostname is
+#      rejected outright ("ringpop config malformed `broadcastAddress` param").
+#   4. monitor.bootstrapRingPop() reads cluster_membership back and hands those
+#      host:ports to ringpop as the bootstrap seed list.
+#
+# So a single node is only healthy when bindOnIP, broadcastAddress and the
+# bootstrap entry are all the same *connectable* address. A wildcard bind cannot
+# be: 0.0.0.0 is not connectable, so broadcastAddress has to fall back to an
+# external address (Render's ephemeral 10.24.x.x), the host advertises that it
+# cannot reach, and the ring comes up empty -
+# "Current reachable members ... addresses: []", "Not enough hosts to serve the
+# request" - after which Temporal shuts itself down. Pinning all three to
+# 127.0.0.1 removes the possibility: the node is always reachable by the only
+# address it can ever advertise.
+#
+# This is PINNED, not defaulted. The platform's environment overrides the
+# image's ENV, and this service is documented (README, .env.example) with
+# BIND_ON_IP=0.0.0.0, so a `${BIND_ON_IP:-127.0.0.1}` default silently loses on
+# Render and puts the wildcard bind straight back. Ignoring the environment
+# keeps the deployment working without changing which variables Render requires.
+SINGLE_NODE_BIND_IP=127.0.0.1
 
-# Broadcast address = the address Temporal advertises for this host in the
-# membership ring. It is always derived here, never hardcoded, and an explicit
-# value still wins.
-if [ -z "${TEMPORAL_BROADCAST_ADDRESS:-}" ]; then
-  if [ "$BIND_ON_IP" = "0.0.0.0" ] || [ "$BIND_ON_IP" = "::0" ]; then
-    # Membership refuses to boot on a wildcard bind without a broadcast address
-    # ("broadcastAddress required when listening on all interfaces
-    # (0.0.0.0/[::])"). Temporal's official entrypoint derives it from the
-    # container's own hostname, so do the same instead of hardcoding a
-    # Render-assigned container IP that changes on every deploy.
-    # `|| true` matters: this script runs with `set -euo pipefail`, so a failing
-    # getent would abort the whole entrypoint (exit 2) before the check below can
-    # report anything useful.
-    TEMPORAL_BROADCAST_ADDRESS="$(getent hosts "$(hostname)" | awk 'NR==1 { print $1 }' || true)"
-    [ -n "$TEMPORAL_BROADCAST_ADDRESS" ] ||
-      die "TEMPORAL_BROADCAST_ADDRESS is unset and could not be derived from hostname '$(hostname)' with BIND_ON_IP=$BIND_ON_IP; set it explicitly"
-    log "derived TEMPORAL_BROADCAST_ADDRESS=${TEMPORAL_BROADCAST_ADDRESS} from BIND_ON_IP=${BIND_ON_IP}"
-  else
-    # Loopback (or an explicitly pinned address): this container is the only
-    # member of the ring, so it is its own advertised address. No Render
-    # container IP is involved at any point.
-    TEMPORAL_BROADCAST_ADDRESS="$BIND_ON_IP"
-    log "using TEMPORAL_BROADCAST_ADDRESS=${TEMPORAL_BROADCAST_ADDRESS} (single node bound to ${BIND_ON_IP})"
-  fi
-  export TEMPORAL_BROADCAST_ADDRESS
+if [ "${BIND_ON_IP:-$SINGLE_NODE_BIND_IP}" != "$SINGLE_NODE_BIND_IP" ]; then
+  log "ignoring BIND_ON_IP='${BIND_ON_IP:-}' : single-node membership is pinned to ${SINGLE_NODE_BIND_IP} (a 0.0.0.0 bind cannot form a ring)"
 fi
+export BIND_ON_IP="$SINGLE_NODE_BIND_IP"
 
+if [ -n "${TEMPORAL_BROADCAST_ADDRESS:-}" ] &&
+  [ "$TEMPORAL_BROADCAST_ADDRESS" != "$SINGLE_NODE_BIND_IP" ]; then
+  log "ignoring TEMPORAL_BROADCAST_ADDRESS='${TEMPORAL_BROADCAST_ADDRESS}': single-node membership is pinned to ${SINGLE_NODE_BIND_IP} (the advertised address must be the address this container binds)"
+fi
+export TEMPORAL_BROADCAST_ADDRESS="$SINGLE_NODE_BIND_IP"
+
+# gRPC stays on loopback and is never exposed to Render; the public HTTP surface
+# is the health front door on 0.0.0.0:$PORT further down.
 export TEMPORAL_ADDRESS="${TEMPORAL_ADDRESS:-127.0.0.1:7233}"
 export TEMPORAL_CLUSTER_HOST="${TEMPORAL_CLUSTER_HOST:-127.0.0.1}"
 export TEMPORAL_NAMESPACE="${TEMPORAL_NAMESPACE:-default}"
@@ -77,6 +84,24 @@ export ENABLE_ES="${ENABLE_ES:-false}"
 
 # The Pulse worker talks to the local Temporal server over plaintext gRPC.
 export TEMPORAL_TLS=false
+
+# `entrypoint.sh --print-membership` resolves the settings above, prints them as
+# KEY=VALUE and exits 0 without touching the database or starting anything.
+# Membership is the first thing to check when a deployment will not form a ring,
+# because BIND_ON_IP and TEMPORAL_BROADCAST_ADDRESS can be overridden by the
+# platform environment and the resulting failure mode looks identical in the
+# logs ("Current reachable members ... addresses: []").
+for arg in "$@"; do
+  if [ "$arg" = "--print-membership" ]; then
+    echo "BIND_ON_IP=${BIND_ON_IP}"
+    echo "TEMPORAL_BROADCAST_ADDRESS=${TEMPORAL_BROADCAST_ADDRESS}"
+    echo "TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS}"
+    echo "TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE}"
+    echo "PORT=${PORT}"
+    echo "REST_PROXY_PORT=${REST_PROXY_PORT}"
+    exit 0
+  fi
+done
 
 CHILD_PIDS=""
 add_child() { CHILD_PIDS="$CHILD_PIDS $1"; }

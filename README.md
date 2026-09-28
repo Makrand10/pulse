@@ -201,7 +201,6 @@ the proxy supports: `start` (with `cronSchedule`, `requestId` and `input`),
   | `SQL_HOST_VERIFICATION` | `true` |
   | `SQL_HOST_NAME` | Neon host |
   | `ENABLE_ES` | `false` |
-  | `BIND_ON_IP` | `0.0.0.0` |
   | `TEMPORAL_NAMESPACE` | `default` |
   | `TEMPORAL_CLUSTER_HOST` | `127.0.0.1` |
   | `MONGO_URI`, `REDIS_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `GROQ_API_KEY`, `AI_*` | same values as the backend — the worker needs them |
@@ -211,13 +210,21 @@ the proxy supports: `start` (with `cronSchedule`, `requestId` and `input`),
   before the worker connects to anything, so a missing value kills the worker at
   boot — and takes the container down with it.
 
-  **`TEMPORAL_BROADCAST_ADDRESS` is derived, not configured.** With
-  `BIND_ON_IP=0.0.0.0` Temporal's membership layer refuses to start
-  (`broadcastAddress required when listening on all interfaces`), and the address
-  changes on every deploy, so it must not be hardcoded. `entrypoint.sh` derives it
-  from the container's own hostname exactly as Temporal's official entrypoint
-  does; set `TEMPORAL_BROADCAST_ADDRESS` explicitly only to override that. Nothing
-  else changes: the REST proxy and health front door still bind `0.0.0.0:$PORT`.
+  **Do not set `BIND_ON_IP` or `TEMPORAL_BROADCAST_ADDRESS` for this service.**
+  The `infra/temporal-demo` image runs one Temporal node in one container and
+  `entrypoint.sh` pins its membership to `127.0.0.1` on purpose. Temporal 1.25.2
+  takes the ringpop listen address from `services.*.rpc.bindOnIP`, writes
+  `broadcastAddress` into the `cluster_membership` table, and then bootstraps
+  ringpop from that same table — so a healthy single node needs all three to be
+  the same connectable address. `0.0.0.0` can never be: the advertised address
+  would have to be Render's ephemeral private IP, which the node cannot reach, and
+  the ring comes up empty (`Current reachable members ... addresses: []`, `Not
+  enough hosts to serve the request`) before Temporal shuts itself down. Any
+  value you set for either variable is ignored and logged at boot; `BIND_ON_IP`
+  is pinned, not defaulted, precisely because Render's environment overrides the
+  image's `ENV` and a default would silently lose. Verify with
+  `docker run --rm <image> --print-membership`. Nothing else changes: the REST
+  proxy and health front door still bind `0.0.0.0:$PORT`.
 
   **Neon needs two databases, created up front.** `DBNAME` and
   `VISIBILITY_DBNAME` must name two *different* databases, both owned by
