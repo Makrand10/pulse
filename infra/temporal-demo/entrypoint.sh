@@ -29,16 +29,29 @@ REST_PROXY_PORT="${REST_PROXY_PORT:-10000}"
 TEMPORAL_START_TIMEOUT_SECONDS="${TEMPORAL_START_TIMEOUT_SECONDS:-180}"
 WORKER_START_GRACE_SECONDS="${WORKER_START_GRACE_SECONDS:-8}"
 
-# Temporal itself only ever talks to itself over loopback.
-export BIND_ON_IP="${BIND_ON_IP:-0.0.0.0}"
+# Temporal only ever talks to itself here: frontend, history, matching, the
+# server's own system worker, the Pulse worker and the REST proxy are all in this
+# one container, and gRPC is never exposed to Render.
+#
+# BIND_ON_IP must therefore be loopback, NOT the 0.0.0.0 wildcard. A wildcard
+# bind obliges Temporal to advertise a broadcast address, and the only usable
+# value is this container's ephemeral private IP (10.24.x.x on Render). Membership
+# then advertises that IP for the whole host, the ring cannot reach even the one
+# local member ("Current reachable members ... addresses: []", "Not enough hosts
+# to serve the request"), and the server shuts itself down. Loopback cannot fail
+# that way, and it keeps the ring a genuine single node.
+export BIND_ON_IP="${BIND_ON_IP:-127.0.0.1}"
 
-# Membership refuses to boot when the server listens on all interfaces without a
-# broadcast address ("broadcastAddress required when listening on all interfaces
-# (0.0.0.0/[::])"). Temporal's official entrypoint derives it from the container's
-# own hostname, so do the same instead of hardcoding a Render-assigned container
-# IP that changes on every deploy. An explicit value still wins.
-if [ "$BIND_ON_IP" = "0.0.0.0" ] || [ "$BIND_ON_IP" = "::0" ]; then
-  if [ -z "${TEMPORAL_BROADCAST_ADDRESS:-}" ]; then
+# Broadcast address = the address Temporal advertises for this host in the
+# membership ring. It is always derived here, never hardcoded, and an explicit
+# value still wins.
+if [ -z "${TEMPORAL_BROADCAST_ADDRESS:-}" ]; then
+  if [ "$BIND_ON_IP" = "0.0.0.0" ] || [ "$BIND_ON_IP" = "::0" ]; then
+    # Membership refuses to boot on a wildcard bind without a broadcast address
+    # ("broadcastAddress required when listening on all interfaces
+    # (0.0.0.0/[::])"). Temporal's official entrypoint derives it from the
+    # container's own hostname, so do the same instead of hardcoding a
+    # Render-assigned container IP that changes on every deploy.
     # `|| true` matters: this script runs with `set -euo pipefail`, so a failing
     # getent would abort the whole entrypoint (exit 2) before the check below can
     # report anything useful.
@@ -46,6 +59,12 @@ if [ "$BIND_ON_IP" = "0.0.0.0" ] || [ "$BIND_ON_IP" = "::0" ]; then
     [ -n "$TEMPORAL_BROADCAST_ADDRESS" ] ||
       die "TEMPORAL_BROADCAST_ADDRESS is unset and could not be derived from hostname '$(hostname)' with BIND_ON_IP=$BIND_ON_IP; set it explicitly"
     log "derived TEMPORAL_BROADCAST_ADDRESS=${TEMPORAL_BROADCAST_ADDRESS} from BIND_ON_IP=${BIND_ON_IP}"
+  else
+    # Loopback (or an explicitly pinned address): this container is the only
+    # member of the ring, so it is its own advertised address. No Render
+    # container IP is involved at any point.
+    TEMPORAL_BROADCAST_ADDRESS="$BIND_ON_IP"
+    log "using TEMPORAL_BROADCAST_ADDRESS=${TEMPORAL_BROADCAST_ADDRESS} (single node bound to ${BIND_ON_IP})"
   fi
   export TEMPORAL_BROADCAST_ADDRESS
 fi

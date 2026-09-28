@@ -107,9 +107,16 @@ COPY --from=rest-proxy /out/temporal-rest-proxy /usr/local/bin/temporal-rest-pro
 # PORT is the public port Render routes to the health front door. It must not be
 # 10000: the proxy owns that port inside this container and 0.0.0.0:10000 would
 # collide with 127.0.0.1:10000. entrypoint.sh refuses to start if they match.
+#
+# BIND_ON_IP is 127.0.0.1, NOT 0.0.0.0: every Temporal service is in this one
+# container and talks over loopback, so gRPC must not bind Render's network.
+# A wildcard bind also forces membership to advertise the container's ephemeral
+# private IP, which the single-node ring then cannot reach ("Current reachable
+# members ... addresses: []") and the server shuts down. The public HTTP surface
+# is the health front door on 0.0.0.0:$PORT below, which is unaffected.
 ENV NODE_ENV=production \
     PORT=8080 \
-    BIND_ON_IP=0.0.0.0 \
+    BIND_ON_IP=127.0.0.1 \
     TEMPORAL_ADDRESS=127.0.0.1:7233 \
     TEMPORAL_NAMESPACE=default \
     TEMPORAL_TLS=false \
