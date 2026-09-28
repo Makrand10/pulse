@@ -19,8 +19,13 @@ async function main() {
   });
 
   const app = createApp();
-  app.listen(config.port, () => {
-    logger.info(`pulse backend listening on http://localhost:${config.port}`);
+  // Bind every interface, not just loopback. `app.listen(port)` with no host
+  // binds ::/0.0.0.0 already, but relying on that made the effective address
+  // invisible in the logs; naming 0.0.0.0 explicitly documents that Render's
+  // edge must be able to reach this port, and the log line then states the
+  // address that is actually bound.
+  app.listen(config.port, '0.0.0.0', () => {
+    logger.info(`pulse backend listening on http://0.0.0.0:${config.port}`);
   });
 }
 
