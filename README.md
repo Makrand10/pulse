@@ -190,12 +190,16 @@ the proxy supports: `start` (with `cronSchedule`, `requestId` and `input`),
   | `AUTH_TOKEN` | shared secret; backend sends it as a bearer token |
   | `DB` | `postgres12` |
   | `DB_PORT` | `5432` |
-  | `DBNAME` / `VISIBILITY_DBNAME` | `temporal` / `temporal_visibility` |
   | `POSTGRES_SEEDS` / `POSTGRES_USER` / `POSTGRES_PWD` | Neon host + credentials |
+  | `DBNAME` | `temporal_core` |
+  | `VISIBILITY_DBNAME` | `temporal_visibility` |
+  | `SKIP_DB_CREATE` | `true` |
   | `POSTGRES_TLS_ENABLED` | `true` |
   | `POSTGRES_TLS_DISABLE_HOST_VERIFICATION` | `false` |
   | `POSTGRES_TLS_SERVER_NAME` | Neon host |
-  | `SQL_TLS_ENABLED` | `true` (server-side TLS to Neon, used by the rendered config) |
+  | `SQL_TLS_ENABLED` | `true` |
+  | `SQL_HOST_VERIFICATION` | `true` |
+  | `SQL_HOST_NAME` | Neon host |
   | `ENABLE_ES` | `false` |
   | `BIND_ON_IP` | `0.0.0.0` |
   | `TEMPORAL_NAMESPACE` | `default` |
@@ -206,6 +210,35 @@ the proxy supports: `start` (with `cronSchedule`, `requestId` and `input`),
   `requiredEnv` for `MONGO_URI`, `REDIS_URL`, `JWT_SECRET` and `ENCRYPTION_KEY`
   before the worker connects to anything, so a missing value kills the worker at
   boot — and takes the container down with it.
+
+  **Neon needs two databases, created up front.** `DBNAME` and
+  `VISIBILITY_DBNAME` must name two *different* databases, both owned by
+  `POSTGRES_USER`. Pointing both at the same database does not work: the core
+  store's migration advances the shared `schema_version` table to 1.14, so the
+  visibility migration then reports "found zero updates" and exits 0 without ever
+  creating `executions_visibility`. The server comes up and looks healthy while
+  workflow queries fail. Set `SKIP_DB_CREATE=true`: with it unset, every boot
+  issues `CREATE DATABASE` for both names, which succeeds only if the Neon role
+  happens to hold `CREATEDB` and otherwise dies with `permission denied to create
+  database`. `SKIP_DB_CREATE` skips only the `create` step — `setup-schema` and
+  `update-schema` still run, so the databases have to exist already. The
+  visibility migration also runs `CREATE EXTENSION IF NOT EXISTS btree_gin`; it is
+  a trusted extension on PostgreSQL 13+, so the Neon database owner can install
+  it, but a role that does not own the database cannot.
+
+  **TLS uses two different sets of variables, and both are required.**
+  `POSTGRES_TLS_*` is read by `temporal-sql-tool` when `/etc/temporal/auto-setup.sh`
+  sets the schema up; `SQL_TLS_ENABLED` / `SQL_HOST_VERIFICATION` / `SQL_CA` /
+  `SQL_HOST_NAME` are read by `config_template.yaml` when `dockerize` renders
+  `/etc/temporal/config/docker.yaml` for the server itself. Neither is inherited
+  by the other: set only `POSTGRES_TLS_ENABLED` and the server boots with TLS off
+  and fails with `no usable database connection found`; set only
+  `SQL_TLS_ENABLED` and the schema setup tries to connect in plaintext. Leave
+  `SQL_CA` and `POSTGRES_TLS_CA_FILE` empty — Neon presents a publicly trusted
+  certificate, and an empty CA file falls back to the OS trust store (the image
+  installs `ca-certificates`). `SQL_HOST_VERIFICATION` is worth setting even
+  though the template defaults it to `false`, so both halves verify the server
+  name.
 
   **Ports: `PORT` must be set to 8080.** The official proxy hardcodes its
   listener on `:10000` and offers no flag or environment variable to change it

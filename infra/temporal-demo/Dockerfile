@@ -94,14 +94,18 @@ ENV NODE_ENV=production \
     REST_PROXY_PORT=10000
 
 # Pulse worker runtime (same layout as the backend image, no API server).
-WORKDIR /pulse
-COPY --from=deps /pulse/node_modules ./node_modules
-COPY --from=deps /pulse/package.json ./
-COPY --from=deps /pulse/apps/backend/package.json ./apps/backend/package.json
-COPY --from=build /pulse/packages/shared-types ./packages/shared-types
-COPY --from=build /pulse/apps/backend/dist ./apps/backend/dist
-COPY infra/temporal-demo/entrypoint.sh ./infra/temporal-demo/entrypoint.sh
-COPY infra/temporal-demo/health-proxy.mjs ./infra/temporal-demo/health-proxy.mjs
+# WORKDIR must stay /etc/temporal (the base image's): `temporal-server --env docker
+# start` loads ./config/docker.yaml relative to the working directory and exits with
+# "config file corrupted" from anywhere else. Paths below are absolute so the app
+# tree stays at /pulse whatever WORKDIR is.
+WORKDIR /etc/temporal
+COPY --from=deps /pulse/node_modules /pulse/node_modules
+COPY --from=deps /pulse/package.json /pulse/package.json
+COPY --from=deps /pulse/apps/backend/package.json /pulse/apps/backend/package.json
+COPY --from=build /pulse/packages/shared-types /pulse/packages/shared-types
+COPY --from=build /pulse/apps/backend/dist /pulse/apps/backend/dist
+COPY infra/temporal-demo/entrypoint.sh /pulse/infra/temporal-demo/entrypoint.sh
+COPY infra/temporal-demo/health-proxy.mjs /pulse/infra/temporal-demo/health-proxy.mjs
 RUN chmod +x /pulse/infra/temporal-demo/entrypoint.sh
 
 # Render routes its public URL to $PORT (the health front door). gRPC stays on
