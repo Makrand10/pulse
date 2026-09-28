@@ -1,17 +1,39 @@
-// Runs the four Pulse backend processes (API server, Temporal health-check
-// worker, AI analysis worker, notifications worker) inside a single container.
-// Children are respawned on failure; SIGTERM/SIGINT are forwarded so `docker
-// compose down` exits cleanly.
 'use strict';
 
 const { spawn } = require('node:child_process');
 
-const PROCESSES = [
+// Runs the Pulse backend processes (API server, Temporal health-check worker,
+// AI analysis worker, notifications worker) inside a single container.
+// Children are respawned on failure; SIGTERM/SIGINT are forwarded so `docker
+// compose down` exits cleanly.
+//
+// PULSE_PROCESSES (comma separated) narrows the set for hosts that only need
+// some of them. The Render Free demo runs the Temporal worker inside the
+// combined Temporal service instead, so the API service sets
+// PULSE_PROCESSES=api,ai-worker,notifications. Unset => all four (local dev).
+const ALL_PROCESSES = [
   { name: 'api', entry: 'dist/server.js', port: 4000 },
   { name: 'temporal-worker', entry: 'dist/temporal/worker.js' },
   { name: 'ai-worker', entry: 'dist/modules/ai-analysis/worker.js' },
   { name: 'notifications', entry: 'dist/modules/notifications/worker.js' },
 ];
+
+const requested = (process.env.PULSE_PROCESSES || '')
+  .split(',')
+  .map((name) => name.trim())
+  .filter(Boolean);
+
+const PROCESSES = requested.length
+  ? ALL_PROCESSES.filter((proc) => requested.includes(proc.name))
+  : ALL_PROCESSES;
+
+if (PROCESSES.length === 0) {
+  console.error(
+    `[entrypoint] PULSE_PROCESSES="${process.env.PULSE_PROCESSES}" matched none of: ${ALL_PROCESSES.map((p) => p.name).join(', ')}`,
+  );
+  process.exit(1);
+}
+
 
 const RESTART_BACKOFF_MS = 2000;
 const children = new Map();

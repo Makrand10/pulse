@@ -8,8 +8,24 @@ import {
   UPTIME_CRON_SCHEDULE,
   workflowIdForApi,
 } from './shared';
+import { TemporalRestError, startWorkflowViaRest, terminateWorkflowViaRest } from './restClient';
 
 let clientPromise: Promise<Client> | null = null;
+
+// Transport selection only. 'grpc' (default) uses the SDK connection below;
+// 'rest' (Render demo) sends the same start/terminate calls to the official
+// Render REST-to-gRPC proxy. Workflow names, ids, task queue, arguments and
+// cron schedule are identical on both paths.
+function usingRestTransport(): boolean {
+  return config.temporalTransport === 'rest';
+}
+
+// The SDK raises WorkflowExecutionAlreadyStartedError; the proxy reports the
+// same condition as gRPC ALREADY_EXISTS. Start stays idempotent either way.
+function isAlreadyStarted(err: unknown): boolean {
+  if (err instanceof WorkflowExecutionAlreadyStartedError) return true;
+  return err instanceof TemporalRestError && err.isAlreadyStarted;
+}
 
 async function getClient(): Promise<Client> {
   if (!clientPromise) {
@@ -33,22 +49,51 @@ export async function startHealthCheckWorkflow(
   teamId: string,
   intervalSeconds: number,
 ): Promise<void> {
+  const workflowId = workflowIdForApi(apiId);
+
+  if (usingRestTransport()) {
+    try {
+      await startWorkflowViaRest({
+        workflowId,
+        workflowType: WORKFLOW_NAME,
+        taskQueue: TASK_QUEUE,
+        args: [{ apiId, teamId, intervalSeconds }],
+      });
+    } catch (err) {
+      if (!isAlreadyStarted(err)) throw err;
+    }
+    return;
+  }
+
   const client = await getClient();
   const handle = client.workflow.start(WORKFLOW_NAME, {
     taskQueue: TASK_QUEUE,
-    workflowId: workflowIdForApi(apiId),
+    workflowId,
     args: [{ apiId, teamId, intervalSeconds }],
   });
   try {
     await handle;
   } catch (err) {
-    if (!(err instanceof WorkflowExecutionAlreadyStartedError)) throw err;
+    if (!isAlreadyStarted(err)) throw err;
   }
 }
 
 export async function stopHealthCheckWorkflow(apiId: string): Promise<void> {
+  const workflowId = workflowIdForApi(apiId);
+
+  if (usingRestTransport()) {
+    // Same tolerance as the gRPC path below: a workflow that is already gone
+    // is a successful stop, so every failure here is swallowed.
+    try {
+      await terminateWorkflowViaRest(workflowId, 'api deactivated or deleted');
+    } catch {
+      // nothing to terminate
+    }
+    return;
+  }
+
   const client = await getClient();
-  const handle = client.workflow.getHandle(workflowIdForApi(apiId));
+  const handle = client.workflow.getHandle(workflowId);
   try {
     await handle.terminate('api deactivated or deleted');
   } catch {
@@ -59,6 +104,21 @@ export async function stopHealthCheckWorkflow(apiId: string): Promise<void> {
 // Idempotent hourly cron, started at boot. Fixed workflowId means a deploy
 // restart re-schedules the same workflow instead of stacking duplicates.
 export async function startUptimeRollupWorkflow(): Promise<void> {
+  if (usingRestTransport()) {
+    try {
+      await startWorkflowViaRest({
+        workflowId: UPTIME_WORKFLOW_ID,
+        workflowType: UPTIME_WORKFLOW_NAME,
+        taskQueue: TASK_QUEUE,
+        cronSchedule: UPTIME_CRON_SCHEDULE,
+        args: [],
+      });
+    } catch (err) {
+      if (!isAlreadyStarted(err)) throw err;
+    }
+    return;
+  }
+
   const client = await getClient();
   const handle = client.workflow.start(UPTIME_WORKFLOW_NAME, {
     taskQueue: TASK_QUEUE,
@@ -69,6 +129,6 @@ export async function startUptimeRollupWorkflow(): Promise<void> {
   try {
     await handle;
   } catch (err) {
-    if (!(err instanceof WorkflowExecutionAlreadyStartedError)) throw err;
+    if (!isAlreadyStarted(err)) throw err;
   }
 }

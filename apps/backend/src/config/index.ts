@@ -24,6 +24,13 @@ export const config = {
   temporalAddress: optionalEnv('TEMPORAL_ADDRESS', 'localhost:7233'),
   temporalNamespace: optionalEnv('TEMPORAL_NAMESPACE', 'default'),
   temporalTls: optionalEnv('TEMPORAL_TLS', 'false') === 'true',
+  // 'grpc' (default) keeps local dev on the SDK's native connection. 'rest'
+  // routes the backend through the official Render REST-to-gRPC proxy, which is
+  // what the Render Free demo needs because the public HTTPS edge has no gRPC.
+  temporalTransport: optionalEnv('TEMPORAL_TRANSPORT', 'grpc') === 'rest' ? ('rest' as const) : ('grpc' as const),
+  temporalRestUrl: optionalEnv('TEMPORAL_REST_URL', ''),
+  temporalAuthToken: optionalEnv('TEMPORAL_AUTH_TOKEN', ''),
+  temporalRestTimeoutMs: Number(optionalEnv('TEMPORAL_REST_TIMEOUT_MS', '10000')),
   resendApiKey: optionalEnv('RESEND_API_KEY', ''),
   emailFrom: optionalEnv('EMAIL_FROM', 'Pulse <alerts@pulse.dev>'),
   appBaseUrl: optionalEnv('APP_BASE_URL', 'http://localhost:3000'),

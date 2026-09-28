@@ -133,9 +133,128 @@ Notes:
   and set `BACKEND_INTERNAL_URL=<public backend base>`.
 - `docker compose down` stops everything; Mongo data persists in a named volume.
 
+### Render Free Demo (no card, no paid services)
+
+Two Render **Free** web services, plus the free tiers of Neon (Postgres),
+MongoDB Atlas and Upstash (Redis). The frontend goes on Vercel.
+
+```
+browser ──HTTPS──> Vercel (Next.js) ──HTTPS──> pulse-backend  (Render Free, API + AI + notifications)
+                                                        │
+                                          TEMPORAL_TRANSPORT=rest (HTTPS + bearer token)
+                                                        ▼
+                                          pulse-temporal-demo (Render Free, ONE container)
+                                          ├─ Temporal Server      gRPC 127.0.0.1:7233
+                                          ├─ Pulse Temporal worker (task queue health-checks)
+                                          ├─ REST-to-gRPC proxy   127.0.0.1:10000  (official render-examples)
+                                          └─ health front door    $PORT (the only public entry)
+                                                └─ Postgres: Neon (temporal + temporal_visibility)
+```
+
+**Why a proxy?** Render's public edge only speaks HTTP/1.1 + HTTPS, so the
+Temporal SDK's gRPC connection from a *different* service cannot be exposed or
+reached. The official [`render-examples/temporal-rest-proxy`](https://github.com/render-examples/temporal-rest-proxy)
+re-exposes the workflow service as REST (`/api/v1/namespaces/...`) so the backend
+can start, inspect and terminate **the same workflows** over HTTPS — the worker
+still polls its task queue natively on loopback gRPC. Pulse only uses endpoints
+the proxy supports: `start` (with `cronSchedule`, `requestId` and `input`),
+`describe`, `workflows/open` (to resolve a runId before terminating) and
+`terminate`.
+
+#### Service 1 — `pulse-backend` (existing service)
+
+- Root Directory `/`, Dockerfile `./apps/backend/Dockerfile` (unchanged).
+- Environment: the normal app config (Mongo, Redis, JWT, encryption, Groq, …)
+  plus:
+
+  | Variable | Value |
+  | --- | --- |
+  | `PULSE_PROCESSES` | `api,ai-worker,notifications` (the Temporal worker runs in service 2) |
+  | `TEMPORAL_TRANSPORT` | `rest` |
+  | `TEMPORAL_REST_URL` | `https://<pulse-temporal-demo>.onrender.com` |
+  | `TEMPORAL_AUTH_TOKEN` | same secret as `AUTH_TOKEN` in service 2 |
+
+  `TEMPORAL_ADDRESS`/`TEMPORAL_TLS` are **not** used in REST mode.
+- Health check path: `/healthz`.
+
+#### Service 2 — `pulse-temporal-demo` (new)
+
+- Root Directory `/`, Dockerfile Path `./infra/temporal-demo/Dockerfile`.
+- Health check path `/healthz` (answered by the front door: 200 only when
+  Temporal's gRPC port is accepting connections).
+- Environment:
+
+  | Variable | Value |
+  | --- | --- |
+  | `PORT` | `8080` — **must be set explicitly**, see the port note below |
+  | `AUTH_TOKEN` | shared secret; backend sends it as a bearer token |
+  | `DB` | `postgres12` |
+  | `DB_PORT` | `5432` |
+  | `DBNAME` / `VISIBILITY_DBNAME` | `temporal` / `temporal_visibility` |
+  | `POSTGRES_SEEDS` / `POSTGRES_USER` / `POSTGRES_PWD` | Neon host + credentials |
+  | `POSTGRES_TLS_ENABLED` | `true` |
+  | `POSTGRES_TLS_DISABLE_HOST_VERIFICATION` | `false` |
+  | `POSTGRES_TLS_SERVER_NAME` | Neon host |
+  | `SQL_TLS_ENABLED` | `true` (server-side TLS to Neon, used by the rendered config) |
+  | `ENABLE_ES` | `false` |
+  | `BIND_ON_IP` | `0.0.0.0` |
+  | `TEMPORAL_NAMESPACE` | `default` |
+  | `TEMPORAL_CLUSTER_HOST` | `127.0.0.1` |
+  | `MONGO_URI`, `REDIS_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `GROQ_API_KEY`, `AI_*` | same values as the backend — the worker needs them |
+
+  `JWT_SECRET` is easy to miss: `worker.ts` imports `config/index.ts`, which calls
+  `requiredEnv` for `MONGO_URI`, `REDIS_URL`, `JWT_SECRET` and `ENCRYPTION_KEY`
+  before the worker connects to anything, so a missing value kills the worker at
+  boot — and takes the container down with it.
+
+  **Ports: `PORT` must be set to 8080.** The official proxy hardcodes its
+  listener on `:10000` and offers no flag or environment variable to change it
+  (`rest-proxy/main.go` calls `http.ListenAndServe(":10000", nil)`). The health
+  front door binds `0.0.0.0:$PORT`, and `0.0.0.0:10000` collides with the proxy's
+  `127.0.0.1:10000`. Render injects `PORT` itself and defaults it to `10000`, so
+  set `PORT=8080` in the service's environment or the deploy fails.
+  `entrypoint.sh` checks this before starting anything and exits with an
+  explicit message instead of dying later on a bare `EADDRINUSE`.
+
+  The supplied PostgreSQL host **must** be reachable from Render. The temporal
+  service is built from the official `temporalio/auto-setup` image, and the
+  supplied host must therefore be a publicly resolvable host (a Render private
+  hostname will not resolve outside the Render network). If Neon is reached
+  through a proxy/socket, set `POSTGRES_SEEDS` to that host instead.
+- Deploy order: create service 2 first, wait for `https://<service>/healthz` to
+  return `{"status":"ok"}`, then add `TEMPORAL_REST_URL` to service 1 and deploy
+  it.
+- The startup script exits non-zero (failing the deploy loudly) if the database
+  setup fails, if the cluster/namespace is not healthy within
+  `TEMPORAL_START_TIMEOUT_SECONDS`, or if the worker or proxy cannot start. If any
+  child dies later the container exits so Render restarts it.
+- The proxy is built from the upstream repository at `REST_PROXY_REF` (default
+  `main`); set it to a commit SHA in Render for a fully pinned build.
+
+#### Free tier limits (demo only)
+
+512 MB RAM per service, spin-down after ~15 min without inbound traffic, and
+750 instance hours/month per workspace. Two always-on free services ≈ 720
+hours/month. Keep monitors low-frequency; if the temporal service is OOM-killed,
+lower monitor concurrency rather than upgrading.
+
+#### Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| `401` from the proxy | `AUTH_TOKEN` (service 2) ≠ `TEMPORAL_AUTH_TOKEN` (service 1) |
+| `/healthz` → `degraded` | Temporal gRPC not up yet; check the deploy logs for the startup step that failed |
+| `502` from the backend | front door up but proxy not listening — `REST_PROXY_PORT` mismatch |
+| `PORT (10000) must not equal REST_PROXY_PORT` | Render defaulted `PORT` to 10000, which the proxy already owns — set `PORT=8080` |
+| `Missing required environment variable: JWT_SECRET` | `JWT_SECRET` is not set on the temporal service; the worker imports config at boot |
+| workflow start `500` | namespace not registered or database setup failed at boot |
+
+Local development is unchanged: `TEMPORAL_TRANSPORT` defaults to `grpc`, and
+`docker compose up` still runs the Temporal worker inside the backend container.
+
 ### Oracle Cloud Always Free (permanent free host)
 
-The only mainstream "free forever, always-on" host big enough for Temporal.
+The only mainstream *always-on* "free forever" host big enough for Temporal.
 2 ARM OCPUs / 12 GB RAM, 200 GB storage, never expires (halved from 4/24 in
 June 2026). A credit/debit card is required for *identity verification only*
 (a ~$1 temporary hold, refunded) — nothing is charged on the Always Free tier.
