@@ -31,6 +31,25 @@ WORKER_START_GRACE_SECONDS="${WORKER_START_GRACE_SECONDS:-8}"
 
 # Temporal itself only ever talks to itself over loopback.
 export BIND_ON_IP="${BIND_ON_IP:-0.0.0.0}"
+
+# Membership refuses to boot when the server listens on all interfaces without a
+# broadcast address ("broadcastAddress required when listening on all interfaces
+# (0.0.0.0/[::])"). Temporal's official entrypoint derives it from the container's
+# own hostname, so do the same instead of hardcoding a Render-assigned container
+# IP that changes on every deploy. An explicit value still wins.
+if [ "$BIND_ON_IP" = "0.0.0.0" ] || [ "$BIND_ON_IP" = "::0" ]; then
+  if [ -z "${TEMPORAL_BROADCAST_ADDRESS:-}" ]; then
+    # `|| true` matters: this script runs with `set -euo pipefail`, so a failing
+    # getent would abort the whole entrypoint (exit 2) before the check below can
+    # report anything useful.
+    TEMPORAL_BROADCAST_ADDRESS="$(getent hosts "$(hostname)" | awk 'NR==1 { print $1 }' || true)"
+    [ -n "$TEMPORAL_BROADCAST_ADDRESS" ] ||
+      die "TEMPORAL_BROADCAST_ADDRESS is unset and could not be derived from hostname '$(hostname)' with BIND_ON_IP=$BIND_ON_IP; set it explicitly"
+    log "derived TEMPORAL_BROADCAST_ADDRESS=${TEMPORAL_BROADCAST_ADDRESS} from BIND_ON_IP=${BIND_ON_IP}"
+  fi
+  export TEMPORAL_BROADCAST_ADDRESS
+fi
+
 export TEMPORAL_ADDRESS="${TEMPORAL_ADDRESS:-127.0.0.1:7233}"
 export TEMPORAL_CLUSTER_HOST="${TEMPORAL_CLUSTER_HOST:-127.0.0.1}"
 export TEMPORAL_NAMESPACE="${TEMPORAL_NAMESPACE:-default}"

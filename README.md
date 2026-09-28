@@ -211,6 +211,14 @@ the proxy supports: `start` (with `cronSchedule`, `requestId` and `input`),
   before the worker connects to anything, so a missing value kills the worker at
   boot — and takes the container down with it.
 
+  **`TEMPORAL_BROADCAST_ADDRESS` is derived, not configured.** With
+  `BIND_ON_IP=0.0.0.0` Temporal's membership layer refuses to start
+  (`broadcastAddress required when listening on all interfaces`), and the address
+  changes on every deploy, so it must not be hardcoded. `entrypoint.sh` derives it
+  from the container's own hostname exactly as Temporal's official entrypoint
+  does; set `TEMPORAL_BROADCAST_ADDRESS` explicitly only to override that. Nothing
+  else changes: the REST proxy and health front door still bind `0.0.0.0:$PORT`.
+
   **Neon needs two databases, created up front.** `DBNAME` and
   `VISIBILITY_DBNAME` must name two *different* databases, both owned by
   `POSTGRES_USER`. Pointing both at the same database does not work: the core

@@ -19,6 +19,7 @@
 
 ARG NODE_IMAGE=node:20-alpine3.19
 ARG TEMPORAL_IMAGE=temporalio/auto-setup:1.25.2
+ARG RUNTIME_IMAGE=node:20-bookworm-slim
 ARG REST_PROXY_REF=main
 
 # ---------------------------------------------------------------------------
@@ -61,19 +62,41 @@ COPY apps/backend/src apps/backend/src
 RUN npm run build -w @pulse/backend
 
 # ---------------------------------------------------------------------------
-# 3. Runtime: Temporal image + Node 20 (Alpine 3.19 build, musl-compatible).
+# 3. Runtime: Debian/glibc + Node 20, with the Temporal server tooling copied in.
 # ---------------------------------------------------------------------------
-FROM ${TEMPORAL_IMAGE}
+# The runtime must be glibc. The Pulse worker dlopen()s @temporalio/core-bridge's
+# prebuilt x86_64-unknown-linux-gnu addon, which needs ld-linux-x86-64.so.2; on
+# the Alpine/musl Temporal image the worker dies with "Error loading shared
+# library ld-linux-x86-64.so.2: No such file or directory". gcompat would only
+# paper over that, so the runtime is a glibc base and the Temporal binaries are
+# lifted in from the official image - they are all static Go builds and run on
+# glibc unchanged.
+FROM ${TEMPORAL_IMAGE} AS temporal-base
+
+FROM ${RUNTIME_IMAGE}
 
 USER root
 
-# Node's official Alpine build links against libstdc++/libgcc that the temporal
-# image does not ship. Both are Alpine 3.19, so the loader stays compatible; the
-# libs are staged in a writable dir because /usr/lib is read-only for us.
-COPY --from=deps /usr/local/bin/node /usr/local/bin/node
-COPY --from=deps /usr/lib/libstdc++.so.6.0.32 /opt/node-libs/libstdc++.so.6
-COPY --from=deps /usr/lib/libgcc_s.so.1 /opt/node-libs/libgcc_s.so.1
-ENV LD_LIBRARY_PATH=/opt/node-libs
+# nc backs entrypoint.sh's readiness probe and auto-setup.sh's Postgres wait.
+# ca-certificates is the trust store the Postgres clients fall back to when
+# SQL_CA / POSTGRES_TLS_CA_FILE are empty (Neon presents a publicly trusted cert).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates netcat-openbsd \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=temporal-base /usr/local/bin/temporal-server /usr/local/bin/temporal-server
+COPY --from=temporal-base /usr/local/bin/temporal /usr/local/bin/temporal
+COPY --from=temporal-base /usr/local/bin/temporal-sql-tool /usr/local/bin/temporal-sql-tool
+COPY --from=temporal-base /usr/local/bin/temporal-cassandra-tool /usr/local/bin/temporal-cassandra-tool
+COPY --from=temporal-base /usr/local/bin/dockerize /usr/local/bin/dockerize
+COPY --from=temporal-base /etc/temporal /etc/temporal
+
+# The official image exports these and they do not come from the base image any
+# more: /etc/temporal/auto-setup.sh reads TEMPORAL_HOME under `set -u`, so
+# dropping it aborts database setup with "TEMPORAL_HOME: unbound variable".
+ENV TEMPORAL_HOME=/etc/temporal \
+    TEMPORAL_SHA=unknown \
+    TCTL_SHA=unknown
 
 # REST-to-gRPC proxy: the upstream binary hardcodes its :10000 listener (see
 # rest-proxy/main.go) and offers no flag or env var for it, so REST_PROXY_PORT
