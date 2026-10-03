@@ -1,12 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
 export function TopBar() {
   const { token, name, role, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+
+if (pathname === '/') {
+  return null;
+}
   const isAdmin = role === 'admin';
 
   return (

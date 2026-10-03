@@ -15,9 +15,17 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -31,6 +39,10 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+/* =========================================================
+   EXISTING APPLICATION STYLES
+   ========================================================= */
 
 .topbar {
   background: var(--panel);
@@ -248,4 +260,273 @@ label.inline input {
   padding: 12px 14px;
   font-size: 14px;
   margin-top: 8px;
+}
+
+/* =========================================================
+   PULSE LANDING PAGE
+   ========================================================= */
+
+.landing-page {
+  /* ---- CHANGE COLORS HERE ONLY ---- */
+  --pulse-bg: #111118;
+  --pulse-surface: #111118;
+  --pulse-border: #2a2540;
+  --pulse-primary: #7c3aed;
+  --pulse-accent: #22c55e;
+  --pulse-text: #f4f4f8;
+  --pulse-muted: #9a98b0;
+  /* --------------------------------- */
+
+  width: 100%;
+  min-height: 100vh;
+  background: var(--pulse-bg);
+  color: var(--pulse-text);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
+
+  position: relative;
+  overflow: hidden;
+
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+}
+.landing-glow {
+  position: absolute;
+  width: 900px;
+  height: 900px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--pulse-primary) 16%, transparent) 0%,
+    color-mix(in srgb, var(--pulse-primary) 5%, transparent) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+.landing-card {
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 110px 110px 90px;
+
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+/* ---------- header: wordmark + ECG side by side ---------- */
+
+.landing-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 30px;
+}
+
+.landing-wordmark {
+  font-family: 'Anton', Impact, Haettenschweiler, 'Arial Narrow Bold',
+    sans-serif;
+  font-size: 200px;
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+  color: var(--pulse-text);
+  text-shadow:
+    0 0 28px color-mix(in srgb, var(--pulse-primary) 60%, transparent),
+    0 0 6px color-mix(in srgb, var(--pulse-primary) 35%, transparent);
+}
+
+.landing-tagline {
+  margin-top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--pulse-text);
+  font-size: 30px;
+  font-weight: 300;
+  white-space: nowrap;
+}
+
+.landing-status-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--pulse-accent);
+  box-shadow:
+    0 0 6px var(--pulse-accent),
+    0 0 14px color-mix(in srgb, var(--pulse-accent) 40%, transparent);
+  animation: landing-pulse 2s ease-in-out infinite;
+}
+
+/* ---------- ECG ---------- */
+
+.landing-ecg {
+  flex: 1;
+  min-width: 0;
+  max-width: 750px;
+  aspect-ratio: 10 / 3;   /* viewBox 400x120 ke barabar, isse wave poori size mein dikhegi */
+  height: auto;           /* fixed 90px hata diya */
+}
+
+.landing-ecg svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.ecg-line {
+  fill: none;
+  stroke: var(--pulse-accent);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter:
+    drop-shadow(0 0 3px color-mix(in srgb, var(--pulse-accent) 70%, transparent))
+    drop-shadow(0 0 9px color-mix(in srgb, var(--pulse-accent) 35%, transparent));
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: ecg-draw 2.8s ease-in-out infinite;
+}
+
+/* ---------- description ---------- */
+
+.landing-content {
+  max-width: 900px;
+  margin-top: 80px;
+}
+
+.landing-content p {
+  margin: 0;
+  color: var(--pulse-muted);
+  font-size: 22px;
+  line-height: 1.7;
+}
+
+/* ---------- button ---------- */
+
+.landing-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 20px;
+  padding-right: 80px;
+  
+}
+
+.landing-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 20px 50px;
+  background: transparent;
+  color: var(--pulse-text);
+  border: 1px solid var(--pulse-primary);
+  border-radius: 999px;
+  font-size: 20px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--pulse-primary) 12%, transparent),
+    inset 0 0 12px color-mix(in srgb, var(--pulse-primary) 6%, transparent);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.landing-button:hover {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--pulse-primary) 18%, transparent);
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px
+    color-mix(in srgb, var(--pulse-primary) 30%, transparent);
+}
+
+.landing-arrow {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ---------- animations ---------- */
+
+@keyframes landing-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+@keyframes ecg-draw {
+  0% { stroke-dashoffset: 600; }
+  40%, 85% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -600; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ecg-line {
+  fill: none;
+  stroke: var(--pulse-accent);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;   /* line kheenchne par mota nahi hogi */
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(
+    0 0 5px color-mix(in srgb, var(--pulse-accent) 75%, transparent)
+  );
+  stroke-dasharray: 600;
+  stroke-dashoffset: 0;
+  animation: none;
+}
+  .landing-status-dot {
+    animation: none;
+  }
+}
+
+/* ---------- tablet ---------- */
+
+/* tablet */
+@media (max-width: 768px) {
+  .landing-card { padding: 40px 32px 28px; }
+  .landing-top { gap: 24px; }
+  .landing-ecg { height: 64px; }
+  .landing-content { margin-top: 32px; }
+  .landing-content p { font-size: 15px; }
+}
+
+/* ---------- mobile ---------- */
+
+@media (max-width: 500px) {
+  .landing-card { padding: 28px 20px 22px; }
+  .landing-top { gap: 14px; }
+  .landing-wordmark { font-size: 52px; }
+  .landing-tagline { font-size: 11px; margin-top: 8px; }
+  .landing-ecg { height: 52px; }
+  .landing-content { margin-top: 26px; }
+  .landing-content p { font-size: 13px; line-height: 1.6; }
+  .landing-button { padding: 8px 14px; font-size: 11px; }
+}
+
+/* ---------- small phones ---------- */
+
+@media (max-width: 380px) {
+  .landing-wordmark { font-size: 44px; }
+  .landing-tagline { font-size: 10px; }
+  .landing-ecg { height: 44px; }
+}
+/* =========================================================
+   REMOVE NORMAL APPLICATION WRAPPER FROM LANDING PAGE
+   ========================================================= */
+
+main.wrap:has(.landing-page) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
 }
