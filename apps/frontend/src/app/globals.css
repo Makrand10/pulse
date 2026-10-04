@@ -463,6 +463,7 @@ label.inline input {
   overflow: hidden;
 
   display: flex;
+  flex-direction: column;
   align-items: stretch;
   justify-content: stretch;
   padding: 0;
@@ -507,6 +508,32 @@ html[data-theme='light'] .landing-page {
   z-index: 1;
   display: flex;
   flex-direction: column;
+}
+
+.landing-video-section {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 110px 72px;
+  position: relative;
+  z-index: 1;
+}
+
+.landing-video-frame {
+  overflow: hidden;
+  border: 1px solid var(--pulse-border);
+  border-radius: 20px;
+  background: var(--pulse-surface);
+  box-shadow: 0 22px 60px var(--surface-shadow);
+}
+
+.landing-video-frame video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  background: var(--pulse-bg);
+  object-fit: contain;
 }
 /* ---------- header: wordmark + ECG side by side ---------- */
 
@@ -597,6 +624,37 @@ html[data-theme='light'] .landing-page {
   line-height: 1.7;
 }
 
+.landing-demo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  color: var(--pulse-muted);
+  font-size: 14px;
+  font-weight: 600;
+  transition: color 0.18s ease;
+}
+
+.landing-demo-link span {
+  color: var(--pulse-primary);
+  transition: transform 0.18s ease;
+}
+
+.landing-demo-link:hover {
+  color: var(--pulse-text);
+  text-decoration: none;
+}
+
+.landing-demo-link:hover span {
+  transform: translateY(2px);
+}
+
+.landing-demo-link:focus-visible {
+  outline: 2px solid var(--pulse-primary);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
 /* ---------- button ---------- */
 
 .landing-action {
@@ -681,6 +739,7 @@ html[data-theme='light'] .landing-page {
 /* tablet */
 @media (max-width: 768px) {
   .landing-card { padding: 40px 32px 28px; }
+  .landing-video-section { padding: 0 32px 48px; }
   .landing-top { gap: 24px; }
   .landing-ecg { height: 64px; }
   .landing-content { margin-top: 32px; }
@@ -691,12 +750,15 @@ html[data-theme='light'] .landing-page {
 
 @media (max-width: 500px) {
   .landing-card { padding: 28px 20px 22px; }
+  .landing-video-section { padding: 0 20px 32px; }
+  .landing-video-frame { border-radius: 14px; }
   .landing-top { gap: 14px; }
   .landing-wordmark { font-size: 52px; }
   .landing-tagline { font-size: 11px; margin-top: 8px; }
   .landing-ecg { height: 52px; }
   .landing-content { margin-top: 26px; }
   .landing-content p { font-size: 13px; line-height: 1.6; }
+  .landing-demo-link { margin-top: 9px; font-size: 12px; }
   .landing-button { padding: 8px 14px; font-size: 11px; }
 }
 

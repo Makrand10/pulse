@@ -39,6 +39,9 @@ export default function Home() {
           <p>
           Pulse monitors your APIs 24/7, detects failures and performance issues, and uses AI to identify likely root causes. When something goes wrong, Pulse creates an incident and keeps your status page up to date.
           </p>
+          <Link href="#demo" className="landing-demo-link">
+            See it in action <span aria-hidden="true">↓</span>
+          </Link>
         </div>
 
         <div className="landing-action">
@@ -46,6 +49,15 @@ export default function Home() {
             <span>try it</span>
             <span className="landing-arrow">→</span>
           </Link>
+        </div>
+      </section>
+
+      <section id="demo" className="landing-video-section" aria-label="Pulse product demo">
+        <div className="landing-video-frame">
+          <video controls playsInline preload="metadata" aria-label="Pulse product demo video">
+            <source src="/pulse-demo.mp4" type="video/mp4" />
+            Your browser does not support HTML video.
+          </video>
         </div>
       </section>
     </main>
