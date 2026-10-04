@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { ThemeProvider } from '@/lib/theme';
 import {
   fetchJson,
   SESSION_EXPIRED_EVENT,
@@ -18,11 +19,13 @@ const swrConfig = {
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <AuthProvider>
-      <SWRConfig value={swrConfig}>
-        <SessionCoordinator>{children}</SessionCoordinator>
-      </SWRConfig>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <SWRConfig value={swrConfig}>
+          <SessionCoordinator>{children}</SessionCoordinator>
+        </SWRConfig>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useTheme } from '@/lib/theme';
 
 export function TopBar() {
   const { token, name, role, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -53,6 +55,19 @@ export function TopBar() {
             <Link href="/admin/login">Admin</Link>
           </>
         )}
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={toggleTheme}
+          aria-label={`Current theme: ${theme}. Switch to ${theme === 'dark' ? 'light' : 'dark'} theme.`}
+          aria-pressed={theme === 'light'}
+          title={`Current theme: ${theme}`}
+        >
+          <span className="theme-toggle-icon" aria-hidden="true">
+            {theme === 'dark' ? '☾' : '☀'}
+          </span>
+          <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+        </button>
       </nav>
     </header>
   );

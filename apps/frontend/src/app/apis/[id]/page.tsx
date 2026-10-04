@@ -195,37 +195,37 @@ export default function ApiDetailPage() {
             <LineChart data={latencyData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
-                stroke="#3A354F"
+                stroke="var(--chart-grid)"
                 strokeOpacity={0.55}
-                fill="#0D0D14"
+                fill="var(--chart-bg)"
               />
               <XAxis
                 dataKey="i"
-                tick={{ fill: '#9A98B0', fontSize: 11 }}
-                axisLine={{ stroke: '#4A455D' }}
-                tickLine={{ stroke: '#4A455D' }}
+                tick={{ fill: 'var(--chart-tick)', fontSize: 11 }}
+                axisLine={{ stroke: 'var(--chart-axis)' }}
+                tickLine={{ stroke: 'var(--chart-axis)' }}
               />
               <YAxis
-                tick={{ fill: '#9A98B0', fontSize: 11 }}
-                axisLine={{ stroke: '#4A455D' }}
-                tickLine={{ stroke: '#4A455D' }}
+                tick={{ fill: 'var(--chart-tick)', fontSize: 11 }}
+                axisLine={{ stroke: 'var(--chart-axis)' }}
+                tickLine={{ stroke: 'var(--chart-axis)' }}
               />
               <Tooltip
                 formatter={(v: number) => `${v} ms`}
                 contentStyle={{
-                  backgroundColor: '#111118',
-                  border: '1px solid #2A2540',
+                  backgroundColor: 'var(--panel)',
+                  border: '1px solid var(--border)',
                   borderRadius: 8,
-                  color: '#F4F4F8',
+                  color: 'var(--chart-tooltip-text)',
                 }}
-                labelStyle={{ color: '#9A98B0' }}
-                itemStyle={{ color: '#F4F4F8' }}
-                cursor={{ stroke: '#7C3AED', strokeOpacity: 0.55 }}
+                labelStyle={{ color: 'var(--chart-tooltip-muted)' }}
+                itemStyle={{ color: 'var(--chart-tooltip-text)' }}
+                cursor={{ stroke: 'var(--accent)', strokeOpacity: 0.55 }}
               />
               <Line
                 type="monotone"
                 dataKey="latency"
-                stroke="#8B5CF6"
+                stroke="var(--chart-line)"
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
