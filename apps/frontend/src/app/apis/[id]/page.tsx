@@ -193,15 +193,40 @@ export default function ApiDetailPage() {
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={latencyData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e3e6ea" />
-              <XAxis dataKey="i" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(v: number) => `${v} ms`} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#3A354F"
+                strokeOpacity={0.55}
+                fill="#0D0D14"
+              />
+              <XAxis
+                dataKey="i"
+                tick={{ fill: '#9A98B0', fontSize: 11 }}
+                axisLine={{ stroke: '#4A455D' }}
+                tickLine={{ stroke: '#4A455D' }}
+              />
+              <YAxis
+                tick={{ fill: '#9A98B0', fontSize: 11 }}
+                axisLine={{ stroke: '#4A455D' }}
+                tickLine={{ stroke: '#4A455D' }}
+              />
+              <Tooltip
+                formatter={(v: number) => `${v} ms`}
+                contentStyle={{
+                  backgroundColor: '#111118',
+                  border: '1px solid #2A2540',
+                  borderRadius: 8,
+                  color: '#F4F4F8',
+                }}
+                labelStyle={{ color: '#9A98B0' }}
+                itemStyle={{ color: '#F4F4F8' }}
+                cursor={{ stroke: '#7C3AED', strokeOpacity: 0.55 }}
+              />
               <Line
                 type="monotone"
                 dataKey="latency"
-                stroke="#2f6fed"
-                strokeWidth={1.5}
+                stroke="#8B5CF6"
+                strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
               />
