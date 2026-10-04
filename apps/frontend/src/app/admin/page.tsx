@@ -7,18 +7,22 @@ import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
 import {
   fetchJson,
+  setLoginNotice,
   type TeamDto,
   type DirectoryUserDto,
 } from '@/lib/api';
 
 export default function AdminHomePage() {
-  const { token, role, activeTeamId, setActiveTeam } = useAuth();
+  const { initialized, token, role, activeTeamId, setActiveTeam } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!token) router.replace('/admin/login');
-    else if (role && role !== 'admin') router.replace('/home');
-  }, [token, role, router]);
+    if (!initialized) return;
+    if (!token) {
+      setLoginNotice('Login required.');
+      router.replace('/login');
+    } else if (role !== 'admin') router.replace('/home');
+  }, [initialized, token, role, router]);
 
   const { data: teams, mutate: mutateTeams } = useSWR<TeamDto[]>(token && role === 'admin' ? '/api/v1/teams' : null);
   const { data: directory, mutate: mutateDirectory } = useSWR<DirectoryUserDto[]>(
@@ -79,7 +83,7 @@ export default function AdminHomePage() {
     }
   }
 
-  if (!token || role !== 'admin') return <p className="muted">Loading…</p>;
+  if (!initialized || !token || role !== 'admin') return <p className="muted">Checking session…</p>;
 
   return (
     <div>

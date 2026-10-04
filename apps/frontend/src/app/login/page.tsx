@@ -1,17 +1,27 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { consumeLoginNotice } from '@/lib/api';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { initialized, token, role, login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNotice(consumeLoginNotice());
+  }, []);
+
+  useEffect(() => {
+    if (initialized && token) router.replace(role === 'admin' ? '/admin' : '/home');
+  }, [initialized, token, role, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -19,7 +29,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       const role = await login(email, password);
-      router.push(role === 'admin' ? '/admin' : '/home');
+      router.replace(role === 'admin' ? '/admin' : '/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -27,12 +37,15 @@ export default function LoginPage() {
     }
   }
 
+  if (!initialized || token) return <p className="muted">Checking session…</p>;
+
   return (
     <div className="card" style={{ maxWidth: 420, margin: '60px auto' }}>
       <h1>User &amp; manager log in</h1>
       <p className="muted" style={{ marginTop: 0 }}>
         For team members who were invited by an admin.
       </p>
+      {notice && <p role="status" className="formError">{notice}</p>}
       <form onSubmit={onSubmit}>
         <label htmlFor="email">Email</label>
         <input

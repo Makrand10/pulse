@@ -6,6 +6,29 @@ import type { UptimeStats, LatestCheck } from '@pulse/shared-types';
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 export const TOKEN_KEY = 'pulse_token';
 export const ACTIVE_TEAM_KEY = 'pulse_active_team_id';
+export const ROLE_KEY = 'pulse_role';
+export const NAME_KEY = 'pulse_name';
+export const EMAIL_KEY = 'pulse_email';
+export const LOGIN_NOTICE_KEY = 'pulse_login_notice';
+export const SESSION_EXPIRED_EVENT = 'pulse:session-expired';
+
+const AUTH_STORAGE_KEYS = [TOKEN_KEY, ROLE_KEY, NAME_KEY, EMAIL_KEY, ACTIVE_TEAM_KEY];
+
+export function clearStoredAuth(): void {
+  if (typeof window === 'undefined') return;
+  AUTH_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
+}
+
+export function setLoginNotice(message: string): void {
+  if (typeof window !== 'undefined') window.sessionStorage.setItem(LOGIN_NOTICE_KEY, message);
+}
+
+export function consumeLoginNotice(): string | null {
+  if (typeof window === 'undefined') return null;
+  const message = window.sessionStorage.getItem(LOGIN_NOTICE_KEY);
+  window.sessionStorage.removeItem(LOGIN_NOTICE_KEY);
+  return message;
+}
 
 export interface ApiDto {
   id: string;
@@ -115,8 +138,18 @@ export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
     ...(activeTeamId ? { 'x-team-id': activeTeamId } : {}),
     ...((init?.headers as Record<string, string>) ?? {}),
   };
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const res = await fetch(`${API_URL}${path}`, { ...init, cache: 'no-store', headers });
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/api/v1/auth/')) {
+      clearStoredAuth();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent(SESSION_EXPIRED_EVENT, {
+            detail: { message: 'Your session has expired. Please log in again.' },
+          }),
+        );
+      }
+    }
     let message = `Request failed (${res.status})`;
     try {
       const body = (await res.json()) as { error?: { message?: string } };

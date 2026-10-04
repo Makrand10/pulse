@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
 export default function RegisterPage() {
-  const { signupMember } = useAuth();
+  const { initialized, token, role: authRole, signupMember } = useAuth();
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -14,6 +14,10 @@ export default function RegisterPage() {
   const [role, setRole] = useState<'user' | 'manager'>('user');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (initialized && token) router.replace(authRole === 'admin' ? '/admin' : '/home');
+  }, [initialized, token, authRole, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -25,13 +29,15 @@ export default function RegisterPage() {
     setSubmitting(true);
     try {
       await signupMember(name, email, password, role);
-      router.push('/home');
+      router.replace('/home');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {
       setSubmitting(false);
     }
   }
+
+  if (!initialized || token) return <p className="muted">Checking session…</p>;
 
   return (
     <div className="card" style={{ maxWidth: 420, margin: '60px auto' }}>

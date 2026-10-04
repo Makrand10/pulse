@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useSWR, { useSWRConfig } from 'swr';
 import { useAuth } from '@/lib/auth';
-import { fetchJson, type ApiDto, type TeamDto } from '@/lib/api';
+import { fetchJson, setLoginNotice, type ApiDto, type TeamDto } from '@/lib/api';
 import type { LatestCheck } from '@pulse/shared-types';
 
 function HealthCell({ currentStatus }: { currentStatus?: LatestCheck | null }) {
@@ -19,7 +19,7 @@ function HealthCell({ currentStatus }: { currentStatus?: LatestCheck | null }) {
 }
 
 export default function ApisPage() {
-  const { token, role, activeTeamId, setActiveTeam } = useAuth();
+  const { initialized, token, role, activeTeamId, setActiveTeam } = useAuth();
   const router = useRouter();
   const { mutate } = useSWRConfig();
   const [filter, setFilter] = useState<string>(activeTeamId ?? 'all');
@@ -28,9 +28,12 @@ export default function ApisPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) router.replace('/admin/login');
-    else if (role && role !== 'admin') router.replace('/home');
-  }, [token, role, router]);
+    if (!initialized) return;
+    if (!token) {
+      setLoginNotice('Login required.');
+      router.replace('/login');
+    } else if (role !== 'admin') router.replace('/home');
+  }, [initialized, token, role, router]);
 
   const { data: teams } = useSWR<TeamDto[]>(token && role === 'admin' ? '/api/v1/teams' : null);
   const listKey = token && role === 'admin' ? `/api/v1/apis?teamId=${filter}` : null;
@@ -55,7 +58,7 @@ export default function ApisPage() {
     }
   }
 
-  if (!token || role !== 'admin') return <p className="muted">Redirecting…</p>;
+  if (!initialized || !token || role !== 'admin') return <p className="muted">Checking session…</p>;
 
   return (
     <div>

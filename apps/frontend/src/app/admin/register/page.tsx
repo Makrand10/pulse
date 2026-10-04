@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
 export default function AdminRegisterPage() {
-  const { signupAdmin } = useAuth();
+  const { initialized, token, role, signupAdmin } = useAuth();
   const router = useRouter();
   const [name, setName] = useState('');
   const [teamName, setTeamName] = useState('');
@@ -14,6 +14,10 @@ export default function AdminRegisterPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (initialized && token) router.replace(role === 'admin' ? '/admin' : '/home');
+  }, [initialized, token, role, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -25,13 +29,15 @@ export default function AdminRegisterPage() {
     setSubmitting(true);
     try {
       await signupAdmin(name, email, password, teamName);
-      router.push('/admin');
+      router.replace('/admin');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {
       setSubmitting(false);
     }
   }
+
+  if (!initialized || token) return <p className="muted">Checking session…</p>;
 
   return (
     <div className="card" style={{ maxWidth: 420, margin: '60px auto' }}>

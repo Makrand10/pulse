@@ -4,19 +4,22 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { apiCreateSchema } from '@pulse/shared-types';
-import { fetchJson, type ApiDto, type TeamDto } from '@/lib/api';
+import { fetchJson, setLoginNotice, type ApiDto, type TeamDto } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
 export default function NewApiPage() {
   const router = useRouter();
-  const { token, role, activeTeamId, setActiveTeam } = useAuth();
+  const { initialized, token, role, activeTeamId, setActiveTeam } = useAuth();
   const [teamId, setTeamId] = useState<string>(activeTeamId ?? '');
   const { data: teams } = useSWR<TeamDto[]>(token && role === 'admin' ? '/api/v1/teams' : null);
 
   useEffect(() => {
-    if (!token) router.replace('/admin/login');
-    else if (role && role !== 'admin') router.replace('/home');
-  }, [token, role, router]);
+    if (!initialized) return;
+    if (!token) {
+      setLoginNotice('Login required.');
+      router.replace('/login');
+    } else if (role !== 'admin') router.replace('/home');
+  }, [initialized, token, role, router]);
 
   useEffect(() => {
     if (teams && teams.length > 0 && !teamId) {
@@ -82,6 +85,10 @@ export default function NewApiPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (!initialized || !token || role !== 'admin') {
+    return <p className="muted">Checking session…</p>;
   }
 
   return (

@@ -56,6 +56,7 @@ describe('APIs CRUD routes', () => {
     const res = await request(app).get('/api/v1/apis');
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('UNAUTHORIZED');
+    expect(res.headers['cache-control']).toBe('private, no-store');
   });
 
   it('creates and lists an API monitor', async () => {

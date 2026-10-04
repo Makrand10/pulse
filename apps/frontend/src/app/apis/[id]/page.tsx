@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import useSWR, { useSWRConfig } from 'swr';
 import {
@@ -14,7 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useAuth } from '@/lib/auth';
-import { fetchJson, type ApiDetailDto, type CheckDto, type TeamMemberDto } from '@/lib/api';
+import { fetchJson, setLoginNotice, type ApiDetailDto, type CheckDto, type TeamMemberDto } from '@/lib/api';
 import { fmtPct, fmtLatency } from '@/lib/format';
 import { IncidentFeed } from '@/components/IncidentFeed';
 
@@ -91,9 +91,17 @@ function AlertRulesCard({ api, onSaved }: { api: ApiDetailDto; onSaved: () => vo
 
 export default function ApiDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { token, role } = useAuth();
+  const { initialized, token, role } = useAuth();
+  const router = useRouter();
   const { mutate } = useSWRConfig();
   const isAdmin = role === 'admin';
+
+  useEffect(() => {
+    if (initialized && !token) {
+      setLoginNotice('Login required.');
+      router.replace('/login');
+    }
+  }, [initialized, token, router]);
 
   const { data: api, error: apiError } = useSWR<ApiDetailDto>(token ? `/api/v1/apis/${id}` : null, {
     refreshInterval: 15_000,
@@ -102,6 +110,8 @@ export default function ApiDetailPage() {
     token ? `/api/v1/apis/${id}/checks?limit=200` : null,
     { refreshInterval: 60_000 },
   );
+
+  if (!initialized || !token) return <p className="muted">Checking session…</p>;
 
   if (apiError) {
     return (

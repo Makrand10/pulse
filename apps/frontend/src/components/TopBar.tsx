@@ -9,9 +9,7 @@ export function TopBar() {
   const router = useRouter();
   const pathname = usePathname();
 
-if (pathname === '/') {
-  return null;
-}
+  if (pathname === '/') return null;
   const isAdmin = role === 'admin';
 
   return (
@@ -21,7 +19,7 @@ if (pathname === '/') {
           Pulse
         </Link>
         {token && (
-          <span className="chip" style={{ marginLeft: 8 }}>
+          <span className="topbar-role">
             {isAdmin ? 'Admin' : role === 'manager' ? 'Manager' : 'User'}
           </span>
         )}
@@ -43,7 +41,7 @@ if (pathname === '/') {
               onClick={(e) => {
                 e.preventDefault();
                 logout();
-                router.push('/');
+                router.replace('/');
               }}
             >
               Log out

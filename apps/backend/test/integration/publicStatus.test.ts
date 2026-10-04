@@ -65,6 +65,7 @@ describe('M8 DoD: public status endpoint', () => {
     });
 
     const res = await request(app).get(`/public/status/${teamSlug}/health`);
+    expect(res.headers['cache-control']).not.toContain('no-store');
 
     expect(res.status).toBe(200);
     expect(Object.keys(res.body).sort()).toEqual(

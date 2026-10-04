@@ -53,6 +53,10 @@ export function createApp() {
     res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not_ready', checks });
   });
 
+  app.use('/api/v1', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    next();
+  });
   app.use('/api/v1', apiRouter);
 
   // Public, unauthenticated status surface (rate-limited, allowlisted DTO).

@@ -7,6 +7,7 @@ import useSWR from 'swr';
 import { useAuth } from '@/lib/auth';
 import {
   fetchJson,
+  setLoginNotice,
   type ApiDto,
   type IncidentDto,
   type InvitationDto,
@@ -15,12 +16,15 @@ import {
 import { timeAgo } from '@/lib/format';
 
 export default function MemberHomePage() {
-  const { token, role, name, activeTeamId, acceptAuth } = useAuth();
+  const { initialized, token, role, name, activeTeamId, acceptAuth } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!token) router.replace('/login');
-  }, [token, router]);
+    if (initialized && !token) {
+      setLoginNotice('Login required.');
+      router.replace('/login');
+    }
+  }, [initialized, token, router]);
 
   const { data: invitations, mutate: mutateInvitations } = useSWR<InvitationDto[]>(
     token ? '/api/v1/teams/me/invitations' : null,
@@ -41,7 +45,7 @@ export default function MemberHomePage() {
     await mutateInvitations();
   }
 
-  if (!token) return <p className="muted">Redirecting…</p>;
+  if (!initialized || !token) return <p className="muted">Checking session…</p>;
 
   const openIncidents = (incidents ?? []).filter((i) => i.status !== 'RESOLVED');
 

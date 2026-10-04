@@ -1,13 +1,27 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { fetchJson, TOKEN_KEY, ACTIVE_TEAM_KEY, type AuthSuccess } from './api';
-
-export const ROLE_KEY = 'pulse_role';
-export const NAME_KEY = 'pulse_name';
-export const EMAIL_KEY = 'pulse_email';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from 'react';
+import {
+  clearStoredAuth,
+  fetchJson,
+  TOKEN_KEY,
+  ACTIVE_TEAM_KEY,
+  ROLE_KEY,
+  NAME_KEY,
+  EMAIL_KEY,
+  SESSION_EXPIRED_EVENT,
+  type AuthSuccess,
+} from './api';
 
 interface AuthState {
+  initialized: boolean;
   token: string | null;
   name: string | null;
   email: string | null;
@@ -24,21 +38,51 @@ interface AuthState {
   acceptAuth: (data: AuthSuccess) => void;
   setActiveTeam: (teamId: string | null) => void;
   logout: () => void;
+  clearSession: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
-function read(key: string): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(key);
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => read(TOKEN_KEY));
-  const [name, setName] = useState<string | null>(() => read(NAME_KEY));
-  const [email, setEmail] = useState<string | null>(() => read(EMAIL_KEY));
-  const [role, setRole] = useState<string | null>(() => read(ROLE_KEY));
-  const [activeTeamId, setActiveTeamId] = useState<string | null>(() => read(ACTIVE_TEAM_KEY));
+  const [initialized, setInitialized] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [name, setName] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
+
+  const syncFromStorage = useCallback(() => {
+    setToken(window.localStorage.getItem(TOKEN_KEY));
+    setName(window.localStorage.getItem(NAME_KEY));
+    setEmail(window.localStorage.getItem(EMAIL_KEY));
+    setRole(window.localStorage.getItem(ROLE_KEY));
+    setActiveTeamId(window.localStorage.getItem(ACTIVE_TEAM_KEY));
+    setInitialized(true);
+  }, []);
+
+  const clearSession = useCallback(() => {
+    clearStoredAuth();
+    setToken(null);
+    setName(null);
+    setEmail(null);
+    setRole(null);
+    setActiveTeamId(null);
+    setInitialized(true);
+  }, []);
+
+  useEffect(() => {
+    syncFromStorage();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === TOKEN_KEY) syncFromStorage();
+    };
+    const onSessionExpired = () => clearSession();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(SESSION_EXPIRED_EVENT, onSessionExpired);
+    };
+  }, [clearSession, syncFromStorage]);
 
   const applyAuth = useCallback((data: AuthSuccess) => {
     const teamId = data.user.teamId ?? data.team?.id ?? null;
@@ -53,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEmail(data.user.email);
     setRole(data.user.role);
     setActiveTeamId(teamId);
+    setInitialized(true);
   }, []);
 
   const login = useCallback(
@@ -96,19 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    [TOKEN_KEY, ROLE_KEY, NAME_KEY, EMAIL_KEY, ACTIVE_TEAM_KEY].forEach((k) =>
-      window.localStorage.removeItem(k),
-    );
-    setToken(null);
-    setName(null);
-    setEmail(null);
-    setRole(null);
-    setActiveTeamId(null);
-  }, []);
+    clearSession();
+  }, [clearSession]);
 
   return (
     <AuthContext.Provider
       value={{
+        initialized,
         token,
         name,
         email,
@@ -120,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         acceptAuth: applyAuth,
         setActiveTeam,
         logout,
+        clearSession,
       }}
     >
       {children}

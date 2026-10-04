@@ -1,17 +1,21 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 
 export default function AdminLoginPage() {
-  const { login } = useAuth();
+  const { initialized, token, role, login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (initialized && token) router.replace(role === 'admin' ? '/admin' : '/home');
+  }, [initialized, token, role, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -23,13 +27,15 @@ export default function AdminLoginPage() {
         setError('This account is not an admin. Use the user/manager log in instead.');
         return;
       }
-      router.push('/admin');
+      router.replace('/admin');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setSubmitting(false);
     }
   }
+
+  if (!initialized || token) return <p className="muted">Checking session…</p>;
 
   return (
     <div className="card" style={{ maxWidth: 420, margin: '60px auto' }}>

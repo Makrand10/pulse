@@ -1,14 +1,14 @@
 :root {
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --border: #e3e6ea;
-  --text: #1c2430;
-  --muted: #6b7686;
-  --accent: #2f6fed;
-  --up: #1aab5e;
-  --degraded: #d99a1b;
-  --down: #d83c3c;
-  --radius: 10px;
+  --bg: #0a0a0f;
+  --panel: #111118;
+  --border: #2a2540;
+  --text: #f4f4f8;
+  --muted: #9a98b0;
+  --accent: #7c3aed;
+  --up: #22c55e;
+  --degraded: #fbbf24;
+  --down: #f87171;
+  --radius: 12px;
 }
 
 * {
@@ -24,8 +24,8 @@ body {
 
 body {
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
+    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -34,10 +34,11 @@ body {
 a {
   color: var(--accent);
   text-decoration: none;
+  transition: color 0.18s ease;
 }
 
 a:hover {
-  text-decoration: underline;
+  color: #a78bfa;
 }
 
 /* =========================================================
@@ -47,36 +48,70 @@ a:hover {
 .topbar {
   background: var(--panel);
   border-bottom: 1px solid var(--border);
-  padding: 14px 24px;
+  min-height: 68px;
+  padding: 12px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 20px;
 }
 
 .topbar .brand {
   font-weight: 700;
-  font-size: 18px;
+  font-size: 20px;
+  letter-spacing: 0.04em;
   color: var(--text);
+  text-transform: uppercase;
+}
+
+.topbar .brand:hover {
+  color: var(--text);
+  text-decoration: none;
+  text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.topbar-role {
+  margin-left: 4px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.topbar nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .topbar nav a {
-  margin-left: 16px;
+  margin-left: 0;
   color: var(--muted);
   font-size: 14px;
+  font-weight: 500;
 }
 
 .topbar nav a:hover {
-  color: var(--accent);
+  color: var(--text);
   text-decoration: none;
 }
 
 .topbar .user {
   font-size: 13px;
   color: var(--muted);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wrap {
-  max-width: 980px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 28px 24px 64px;
 }
@@ -85,7 +120,8 @@ a:hover {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 22px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
 }
 
 .card + .card {
@@ -102,12 +138,15 @@ a:hover {
 }
 
 h1 {
-  font-size: 22px;
+  font-size: clamp(24px, 3vw, 30px);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
   margin: 0 0 4px;
 }
 
 h2 {
-  font-size: 17px;
+  font-size: 18px;
+  letter-spacing: -0.015em;
   margin: 0 0 12px;
 }
 
@@ -131,6 +170,7 @@ h2 {
 
 .statusDot.UP {
   background: var(--up);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--up) 45%, transparent);
 }
 
 .statusDot.DOWN {
@@ -150,18 +190,21 @@ h2 {
 }
 
 .chip.OPEN {
-  background: #fdecec;
+  background: color-mix(in srgb, var(--down) 14%, var(--panel));
   color: var(--down);
+  border: 1px solid color-mix(in srgb, var(--down) 32%, transparent);
 }
 
 .chip.INVESTIGATING {
-  background: #fdf3e3;
+  background: color-mix(in srgb, var(--degraded) 14%, var(--panel));
   color: var(--degraded);
+  border: 1px solid color-mix(in srgb, var(--degraded) 32%, transparent);
 }
 
 .chip.RESOLVED {
-  background: #e6f6ed;
+  background: color-mix(in srgb, var(--up) 14%, var(--panel));
   color: var(--up);
+  border: 1px solid color-mix(in srgb, var(--up) 32%, transparent);
 }
 
 button,
@@ -174,20 +217,39 @@ textarea {
 button {
   background: var(--accent);
   color: #fff;
-  border: 0;
-  border-radius: 8px;
-  padding: 9px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+button:hover:not(:disabled) {
+  background: #6d28d9;
+  border-color: #8b5cf6;
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 button.secondary {
-  background: #eef1f5;
+  background: #1a1923;
+  border-color: var(--border);
   color: var(--text);
+}
+
+button.secondary:hover:not(:disabled) {
+  background: #252236;
+  border-color: #51416f;
 }
 
 button.link {
   background: none;
-  color: var(--accent);
+  color: #a78bfa;
   padding: 0;
 }
 
@@ -198,8 +260,21 @@ textarea {
   padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: #0d0d14;
   color: var(--text);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+input[type='checkbox'] {
+  accent-color: var(--accent);
 }
 
 label {
@@ -240,6 +315,14 @@ label.inline input {
   font-size: 14px;
 }
 
+.table tbody tr {
+  transition: background 0.16s ease;
+}
+
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+}
+
 .table th {
   color: var(--muted);
   font-weight: 600;
@@ -254,12 +337,34 @@ label.inline input {
 }
 
 .aisummary {
-  background: #eef4ff;
-  border: 1px solid #d5e3ff;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 8px;
   padding: 12px 14px;
   font-size: 14px;
   margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px 20px;
+  }
+
+  .topbar nav {
+    justify-content: flex-start;
+    gap: 14px;
+    width: 100%;
+  }
+
+  .wrap {
+    padding: 22px 16px 48px;
+  }
+
+  .card {
+    padding: 18px;
+  }
 }
 
 /* =========================================================
